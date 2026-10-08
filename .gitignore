@@ -31,3 +31,7 @@ dist/
 tests/fixtures/*
 !tests/fixtures/*.py
 !tests/fixtures/README.md
+
+# Validation output (counts and rule IDs only, but run-specific).
+validation-results.csv
+validation-results/
