@@ -1,0 +1,33 @@
+# Real samples never live in this repository.
+samples/
+*.zip
+!tests/fixtures/**/*.zip
+*.7z
+*.iso
+*.exe
+*.dll
+*.bin
+*.mal
+*.vir
+infected/
+
+# Reports generated from analysis runs.
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Only explicitly listed fixture types are tracked. Fixtures are synthetic and benign
+# (see tests/fixtures/README.md); add a negation here deliberately when a new kind is needed.
+tests/fixtures/*
+!tests/fixtures/*.py
+!tests/fixtures/README.md

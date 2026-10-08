@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unopened"
+version = "0.1.0"
+description = "Static malware triage for SOC analysts. Never executes the sample."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pefile>=2023.2.7",
+    "signify>=0.7",
+]
+
+[project.optional-dependencies]
+fuzzy = ["py-tlsh>=4.7"]
+office = ["oletools>=0.60.1", "defusedxml>=0.7"]
+lnk = ["LnkParse3>=1.5"]
+yara = ["yara-python>=4.3"]
+capa = ["flare-capa>=9.0"]
+archive = ["py7zr>=1.0", "pyzipper>=0.3.6", "pycdlib>=1.14"]
+pdf = ["pypdf>=6.0"]
+all = [
+    "py-tlsh>=4.7", "oletools>=0.60.1", "defusedxml>=0.7", "LnkParse3>=1.5",
+    "yara-python>=4.3", "flare-capa>=9.0", "py7zr>=1.0", "pyzipper>=0.3.6", "pycdlib>=1.14",
+    "pypdf>=6.0",
+]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+unopened = "unopened.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+unopened = ["data/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    # oletools uses pyparsing's old camelCase names; not ours to fix.
+    "ignore::DeprecationWarning:oletools.*",
+    "ignore:.*deprecated - use.*:DeprecationWarning",
+]
+markers = [
+    "corpus: false-positive measurement over a benign corpus kept outside the repo (set UNOPENED_CORPUS)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

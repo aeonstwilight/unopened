@@ -1,0 +1,109 @@
+# Imported Windows API functions grouped by what they let a program do.
+#
+# Names are base names: "CreateProcess" also matches CreateProcessA and CreateProcessW.
+# Plenty of legitimate software imports these. A category is a lead to follow, not proof;
+# the report says so next to every match.
+
+[process_injection]
+title = "Process injection"
+description = "Allocating memory in, writing to, or starting threads in another process."
+severity = "medium"
+functions = [
+    "VirtualAllocEx", "WriteProcessMemory", "CreateRemoteThread", "CreateRemoteThreadEx",
+    "NtWriteVirtualMemory", "ZwWriteVirtualMemory", "QueueUserAPC", "NtQueueApcThread",
+    "SetThreadContext", "NtSetContextThread", "NtUnmapViewOfSection", "ZwUnmapViewOfSection",
+    "RtlCreateUserThread", "NtCreateThreadEx", "NtMapViewOfSection",
+]
+
+[input_capture]
+title = "Keyboard or input capture"
+description = "Installing hooks or polling key state, as keyloggers do."
+severity = "medium"
+functions = [
+    "SetWindowsHookEx", "GetAsyncKeyState", "GetKeyboardState", "RegisterRawInputDevices",
+    "GetRawInputData",
+]
+
+[credential_access]
+title = "Credential access"
+description = "Reading stored credentials, decrypting protected data, or dumping process memory."
+severity = "medium"
+functions = [
+    "CredEnumerate", "CredRead", "LsaRetrievePrivateData", "CryptUnprotectData",
+    "MiniDumpWriteDump", "SamQueryInformationUser", "LsaEnumerateLogonSessions",
+]
+
+[anti_analysis]
+title = "Debugger or analysis detection"
+description = "Checking whether a debugger is attached, a common evasion step."
+severity = "low"
+functions = [
+    "IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess",
+    "NtSetInformationThread", "OutputDebugString",
+]
+
+[dynamic_resolution]
+title = "Runtime API resolution"
+description = "Loading libraries and looking up functions at runtime, which hides what the program really calls."
+severity = "low"
+functions = ["LoadLibrary", "LoadLibraryEx", "GetProcAddress", "LdrLoadDll", "LdrGetProcedureAddress"]
+
+[execution]
+title = "Starting programs"
+description = "Launching other programs or commands."
+severity = "low"
+functions = [
+    "CreateProcess", "CreateProcessAsUser", "CreateProcessWithLogon", "CreateProcessWithToken",
+    "WinExec", "ShellExecute", "ShellExecuteEx",
+]
+
+[persistence]
+title = "Registry and service changes"
+description = "Writing registry values or installing/changing services, both used for persistence."
+severity = "low"
+functions = [
+    "RegSetValue", "RegSetValueEx", "RegCreateKey", "RegCreateKeyEx", "CreateService",
+    "ChangeServiceConfig", "ChangeServiceConfig2",
+]
+
+[network]
+title = "Network communication"
+description = "HTTP, FTP or raw socket functions."
+severity = "low"
+functions = [
+    "InternetOpen", "InternetOpenUrl", "InternetConnect", "InternetReadFile", "HttpOpenRequest",
+    "HttpSendRequest", "URLDownloadToFile", "URLDownloadToCacheFile", "WinHttpOpen",
+    "WinHttpConnect", "WinHttpOpenRequest", "WinHttpSendRequest", "WSAStartup", "WSASocket",
+    "socket", "connect", "send", "recv", "gethostbyname", "getaddrinfo", "DnsQuery_A",
+    "DnsQuery_W", "FtpPutFile",
+]
+
+[crypto]
+title = "Encryption"
+description = "Encrypting or decrypting data. Normal in many programs; also used by ransomware and to hide payloads."
+severity = "low"
+functions = [
+    "CryptEncrypt", "CryptDecrypt", "CryptGenKey", "CryptImportKey", "CryptDeriveKey",
+    "BCryptEncrypt", "BCryptDecrypt", "BCryptGenerateSymmetricKey", "BCryptImportKeyPair",
+]
+
+[privilege]
+title = "Privilege and token manipulation"
+description = "Enabling privileges or impersonating other users."
+severity = "low"
+functions = [
+    "AdjustTokenPrivileges", "LookupPrivilegeValue", "ImpersonateLoggedOnUser", "DuplicateTokenEx",
+    "SetThreadToken",
+]
+
+[discovery]
+title = "Process discovery"
+description = "Listing running processes, often to find a target or detect security tools."
+severity = "info"
+functions = ["CreateToolhelp32Snapshot", "Process32First", "Process32Next", "EnumProcesses"]
+
+[memory_protection]
+title = "Changing memory protection"
+description = "Allocating or re-protecting memory as executable, used by unpackers and loaders."
+severity = "info"
+functions = ["VirtualAlloc", "VirtualProtect", "VirtualProtectEx", "NtProtectVirtualMemory"]

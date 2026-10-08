@@ -1,0 +1,66 @@
+# Known-benign indicator noise. Matching indicators are removed from the report's
+# indicator lists but are still counted, so you can always see that something was hidden.
+#
+# Keep this list conservative. Anything here can hide abuse of that domain or range.
+# Do NOT add general hosting or file-sharing services (cloud storage, paste sites,
+# code hosting, CDNs, URL shorteners): attackers use them precisely because they look benign.
+#
+# Override with:  unopened triage FILE --allowlist my-allowlist.toml
+
+[domains]
+# Exact domain names.
+exact = [
+    "schemas.microsoft.com",
+    "schemas.openxmlformats.org",
+    "schemas.xmlsoap.org",
+    "ns.adobe.com",
+    "purl.org",
+]
+# The domain itself and every subdomain.
+suffix = [
+    # XML namespaces and standards bodies
+    "w3.org",
+    "openxmlformats.org",
+    "xmlsoap.org",
+    # Certificate authorities: CRL, OCSP and CPS URLs inside Authenticode signatures
+    "digicert.com",
+    "verisign.com",
+    "symcb.com",
+    "symcd.com",
+    "thawte.com",
+    "globalsign.com",
+    "globalsign.net",
+    "sectigo.com",
+    "usertrust.com",
+    "comodoca.com",
+    "entrust.net",
+    "godaddy.com",
+    "starfieldtech.com",
+    "certum.pl",
+    "letsencrypt.org",
+    "identrust.com",
+    # Microsoft documentation and PKI (not windows.net, live.com, sharepoint.com etc.)
+    "microsoft.com",
+]
+
+[urls]
+# URL prefixes (case-insensitive). URLs whose host is allowlisted above are also hidden.
+prefix = []
+
+[ips]
+# Addresses or CIDR ranges.
+cidr = [
+    "0.0.0.0/32",
+    "255.255.255.255/32",
+]
+
+[emails]
+exact = []
+
+[paths]
+# File path prefixes (case-insensitive).
+prefix = []
+
+[registry]
+# Registry key prefixes (case-insensitive).
+prefix = []

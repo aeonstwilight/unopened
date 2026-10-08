@@ -1,0 +1,204 @@
+# Script keywords by language. Each entry is matched (as a regular expression) against
+# both the original script text and the deobfuscated text.
+#
+# tags drive combination findings: a script tagged both "download" and "execute"
+# gets a HIGH "downloads and runs" finding.
+#
+# Plenty of admin scripts use some of these. A single keyword is a lead, not proof.
+
+# PowerShell ---------------------------------------------------------------------------
+
+[[powershell]]
+id = "ps.invoke_expression"
+pattern = '(?i)\b(?:iex|invoke-expression)\b'
+severity = "medium"
+title = "Runs text as code (Invoke-Expression)"
+tags = ["execute"]
+
+[[powershell]]
+id = "ps.download"
+pattern = '(?i)\b(?:DownloadString|DownloadFile|DownloadData|Invoke-WebRequest|iwr|Invoke-RestMethod|irm|Start-BitsTransfer)\b|Net\.WebClient'
+severity = "medium"
+title = "Downloads from the internet"
+tags = ["download"]
+
+[[powershell]]
+id = "ps.start_process"
+pattern = '(?i)\b(?:Start-Process|saps|Invoke-Item)\b'
+severity = "low"
+title = "Starts another program"
+tags = ["execute"]
+
+[[powershell]]
+id = "ps.hidden_window"
+pattern = '(?i)-w(?:indowstyle)?\s+(?:hidden|h\b)'
+severity = "medium"
+title = "Hides its window"
+tags = ["stealth"]
+
+[[powershell]]
+id = "ps.bypass"
+pattern = '(?i)-(?:ep|exec(?:utionpolicy)?)\s+bypass\b|-nop(?:rofile)?\b'
+severity = "low"
+title = "Bypasses execution policy or profile"
+tags = ["stealth"]
+
+[[powershell]]
+id = "ps.amsi_bypass"
+pattern = '(?i)AmsiUtils|amsiInitFailed|AmsiScanBuffer'
+severity = "high"
+title = "Tampers with AMSI (anti-malware scanning)"
+tags = ["defense_evasion"]
+
+[[powershell]]
+id = "ps.defender_tamper"
+pattern = '(?i)(?:Add|Set)-MpPreference\b[^\n]*-(?:Exclusion\w*|Disable\w*)'
+severity = "high"
+title = "Changes Microsoft Defender settings"
+tags = ["defense_evasion"]
+
+[[powershell]]
+id = "ps.reflective_load"
+pattern = '(?i)Reflection\.Assembly\]::Load|\[Reflection\.Assembly\]::Load|::LoadWithPartialName'
+severity = "medium"
+title = "Loads a .NET assembly from memory"
+tags = ["execute"]
+
+[[powershell]]
+id = "ps.native_api"
+pattern = '(?i)DllImport|VirtualAlloc|GetDelegateForFunctionPointer|kernel32\.dll'
+severity = "medium"
+title = "Calls native Windows APIs directly (shellcode loaders do this)"
+tags = ["execute"]
+
+[[powershell]]
+id = "ps.persistence"
+pattern = '(?i)Register-ScheduledTask|New-ScheduledTask|schtasks|CurrentVersion\\Run'
+severity = "medium"
+title = "Sets up persistence (scheduled task or Run key)"
+tags = ["persistence"]
+
+# JavaScript / JScript -----------------------------------------------------------------
+
+[[javascript]]
+id = "js.activex"
+pattern = '\bActiveXObject\b|WScript\.CreateObject'
+severity = "medium"
+title = "Creates Windows COM objects (ActiveXObject)"
+tags = ["com"]
+
+[[javascript]]
+id = "js.shell"
+pattern = '(?i)WScript\.Shell|Shell\.Application|\.ShellExecute\b|\.Run\s*\(|\.Exec\s*\('
+severity = "medium"
+title = "Runs programs or commands"
+tags = ["execute"]
+
+[[javascript]]
+id = "js.download"
+pattern = '(?i)MSXML2\.(?:Server)?XMLHTTP|WinHttp\.WinHttpRequest|Microsoft\.XMLHTTP|ADODB\.Stream'
+severity = "medium"
+title = "Downloads or writes files (XMLHTTP / ADODB.Stream)"
+tags = ["download"]
+
+[[javascript]]
+id = "js.eval"
+pattern = '\beval\s*\(|\bnew\s+Function\s*\('
+severity = "low"
+title = "Runs text as code (eval)"
+tags = ["execute"]
+
+# VBScript -----------------------------------------------------------------------------
+
+[[vbscript]]
+id = "vbs.shell"
+pattern = '(?i)WScript\.Shell|Shell\.Application|\.ShellExecute\b|\.Run\b|\.Exec\b|\bShell\s*\('
+severity = "medium"
+title = "Runs programs or commands"
+tags = ["execute"]
+
+[[vbscript]]
+id = "vbs.download"
+pattern = '(?i)MSXML2\.(?:Server)?XMLHTTP|WinHttp\.WinHttpRequest|Microsoft\.XMLHTTP|ADODB\.Stream'
+severity = "medium"
+title = "Downloads or writes files (XMLHTTP / ADODB.Stream)"
+tags = ["download"]
+
+[[vbscript]]
+id = "vbs.execute"
+pattern = '(?i)\b(?:Execute|ExecuteGlobal|Eval)\b\s*[\("]'
+severity = "medium"
+title = "Runs text as code (Execute/Eval)"
+tags = ["execute"]
+
+[[vbscript]]
+id = "vbs.powershell"
+pattern = '(?i)\bpowershell(?:\.exe)?\b'
+severity = "medium"
+title = "Launches PowerShell"
+tags = ["execute"]
+
+# Batch --------------------------------------------------------------------------------
+
+[[batch]]
+id = "bat.powershell"
+pattern = '(?i)\bpowershell(?:\.exe)?\b'
+severity = "medium"
+title = "Launches PowerShell"
+tags = ["execute"]
+
+[[batch]]
+id = "bat.certutil"
+pattern = '(?i)\bcertutil(?:\.exe)?\b[^\n]*-(?:urlcache|decode|decodehex)\b'
+severity = "high"
+title = "Uses certutil to download or decode files"
+tags = ["download"]
+
+[[batch]]
+id = "bat.bitsadmin"
+pattern = '(?i)\bbitsadmin(?:\.exe)?\b[^\n]*/transfer\b'
+severity = "high"
+title = "Uses bitsadmin to download files"
+tags = ["download"]
+
+[[batch]]
+id = "bat.download"
+pattern = '(?i)\b(?:curl|wget)(?:\.exe)?\s[^\n]*https?://'
+severity = "medium"
+title = "Downloads from the internet (curl/wget)"
+tags = ["download"]
+
+[[batch]]
+id = "bat.start"
+pattern = '(?im)^\s*(?:start|call)\s'
+severity = "info"
+title = "Starts other programs"
+tags = ["execute"]
+
+[[batch]]
+id = "bat.run_key"
+pattern = '(?i)\breg(?:\.exe)?\s+add\b[^\n]*\\CurrentVersion\\Run'
+severity = "high"
+title = "Adds a Run key (starts at every logon)"
+tags = ["persistence"]
+
+[[batch]]
+id = "bat.schtasks"
+pattern = '(?i)\bschtasks(?:\.exe)?\b[^\n]*/create\b'
+severity = "medium"
+title = "Creates a scheduled task"
+tags = ["persistence"]
+
+[[batch]]
+id = "bat.destroy_backups"
+pattern = '(?i)vssadmin(?:\.exe)?\s+delete\s+shadows|wbadmin(?:\.exe)?\s+delete|bcdedit(?:\.exe)?[^\n]*recoveryenabled\s+no'
+severity = "high"
+title = "Deletes backups or disables recovery (typical of ransomware)"
+tags = ["impact"]
+
+[[batch]]
+id = "bat.hide"
+pattern = '(?i)\battrib(?:\.exe)?\s[^\n]*\+h\b'
+severity = "low"
+title = "Hides files"
+tags = ["stealth"]

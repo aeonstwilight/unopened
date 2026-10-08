@@ -1,0 +1,110 @@
+# Windows binaries that attackers abuse to run code ("living off the land").
+# A shortcut that launches one of these is unusual for a document or a normal app.
+# severity: how suspicious it is as a shortcut *target*. Names are matched case-insensitively
+# against the target's file name, and as whole words inside the arguments.
+# See https://lolbas-project.github.io/ for details on each.
+
+[powershell]
+names = ["powershell.exe", "pwsh.exe"]
+severity = "high"
+why = "Runs PowerShell commands or scripts."
+
+[cmd]
+names = ["cmd.exe"]
+severity = "high"
+why = "Runs shell commands."
+
+[mshta]
+names = ["mshta.exe"]
+severity = "high"
+why = "Runs HTML Applications (script) from files or URLs."
+
+[wscript]
+names = ["wscript.exe", "cscript.exe"]
+severity = "high"
+why = "Runs VBScript/JScript files."
+
+[rundll32]
+names = ["rundll32.exe"]
+severity = "high"
+why = "Runs an exported function from a DLL."
+
+[regsvr32]
+names = ["regsvr32.exe"]
+severity = "high"
+why = "Can load and run scriptlets from URLs (Squiblydoo)."
+
+[msiexec]
+names = ["msiexec.exe"]
+severity = "high"
+why = "Installs packages, including from URLs."
+
+[certutil]
+names = ["certutil.exe"]
+severity = "high"
+why = "Can download and decode files."
+
+[bitsadmin]
+names = ["bitsadmin.exe"]
+severity = "high"
+why = "Can download files in the background."
+
+[curl]
+names = ["curl.exe"]
+severity = "high"
+why = "Downloads files."
+
+[forfiles]
+names = ["forfiles.exe"]
+severity = "high"
+why = "Runs commands indirectly, used to hide the real command."
+
+[conhost]
+names = ["conhost.exe"]
+severity = "medium"
+why = "Can launch other programs headless."
+
+[schtasks]
+names = ["schtasks.exe"]
+severity = "high"
+why = "Creates scheduled tasks (persistence)."
+
+[wmic]
+names = ["wmic.exe"]
+severity = "high"
+why = "Runs processes and commands via WMI."
+
+[hh]
+names = ["hh.exe"]
+severity = "high"
+why = "Opens compiled HTML help, which can run script."
+
+[msbuild]
+names = ["msbuild.exe"]
+severity = "high"
+why = "Compiles and runs inline code from project files."
+
+[dotnet_tools]
+names = ["installutil.exe", "regasm.exe", "regsvcs.exe"]
+severity = "high"
+why = "Loads and runs .NET assemblies."
+
+[cmstp]
+names = ["cmstp.exe"]
+severity = "high"
+why = "Installs connection profiles that can run commands."
+
+[odbcconf]
+names = ["odbcconf.exe"]
+severity = "high"
+why = "Can load DLLs."
+
+[pcalua]
+names = ["pcalua.exe"]
+severity = "medium"
+why = "Launches programs indirectly."
+
+[explorer]
+names = ["explorer.exe"]
+severity = "low"
+why = "Can open URLs or files, sometimes used to launch payloads indirectly."
