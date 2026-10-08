@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 
 import pytest
@@ -115,7 +116,12 @@ def test_unconfigured_rules_are_loud(make_file, fixtures, capsys, monkeypatch):
     md = capsys.readouterr().out
     assert "## Warning: some checks did not complete" in md
     assert "no YARA rules configured" in md
-    assert "no capa rules configured" in md
+    # Without the capa package the missing library is reported first; either way the
+    # capa gap must be loud, never silent.
+    if importlib.util.find_spec("capa") is not None:
+        assert "no capa rules configured" in md
+    else:
+        assert "**capa**: UNAVAILABLE. Python package 'capa' is not installed" in md
 
 
 def test_archive_options(make_file, arch_fx, capsys):
