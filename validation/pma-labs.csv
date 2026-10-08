@@ -1,0 +1,36 @@
+# Expectations for the Practical Malware Analysis labs (milestone M5).
+# DRAFT: written from the book's lab walkthroughs (Appendix C) without access to the
+# samples. Check every row against the book before relying on the numbers, and fill in
+# sha256 once the samples are in the VM (rows match by name until then).
+# Behaviors describe what the sample does, not what static analysis can see. Behaviors
+# hidden by packing or encryption are expected misses; the notes column says which.
+# Labels: python scripts/validate.py --list-behaviors
+sha256,name,label,expected_verdict,expected_behaviors,notes
+,Lab01-01.exe,malicious,malicious|suspicious,discovery;file_write,"Searches C:\ for .exe files and copies a DLL as kerne132.dll (lookalike of kernel32.dll)"
+,Lab01-01.dll,malicious,malicious|suspicious,dll;network;network_indicator;mutex;execution,"Backdoor with a hardcoded IP; mutex; runs commands"
+,Lab01-02.exe,malicious,malicious|suspicious,packed;service;persistence;network;network_indicator,"UPX packed; service and URL are only visible after unpacking (expected misses statically)"
+,Lab01-03.exe,malicious,malicious|suspicious,packed;network;network_indicator,"FSG packed; opens a URL through COM (expected misses statically)"
+,Lab01-04.exe,malicious,malicious|suspicious,embedded_payload;privilege;file_write;execution;download;network_indicator,"Resource holds a second PE that is dropped as wupdmgr.exe and downloads an update; URL is in the resource"
+,Lab03-01.exe,malicious,malicious|suspicious,packed;persistence;registry;network_indicator;mutex;file_write,"Packed with very few imports; Run key, URL and mutex name are visible as strings"
+,Lab03-02.dll,malicious,malicious|suspicious,dll;service;persistence;network;network_indicator,"Installs itself as a service (ServiceMain export); HTTP beacon"
+,Lab03-03.exe,malicious,malicious|suspicious,injection;embedded_payload;encoding;keylogging,"Process replacement into svchost.exe; XOR-encoded keylogger in a resource (keylogging is an expected miss statically)"
+,Lab03-04.exe,malicious,malicious|suspicious,service;persistence;registry;network;execution;file_write,"Deletes itself unless run with the right arguments; service install and registry config"
+,Lab05-01.dll,malicious,malicious|suspicious,dll;network;network_indicator;anti_analysis;execution,"Large backdoor; checks for VMware"
+,Lab06-01.exe,malicious,malicious|suspicious,network,"Checks for an Internet connection"
+,Lab06-02.exe,malicious,malicious|suspicious,network;network_indicator;download,"Downloads a web page and parses a command from an HTML comment"
+,Lab06-03.exe,malicious,malicious|suspicious,network;network_indicator;download;persistence;registry;file_write,"Adds commands that copy and delete files and set a Run key"
+,Lab06-04.exe,malicious,malicious|suspicious,network;network_indicator;download;persistence;registry;file_write,"Like Lab06-03, looping with a versioned user agent"
+,Lab07-01.exe,malicious,malicious|suspicious,service;persistence;mutex;network;network_indicator,"Service install; mutex; waits for a date, then many threads request a URL"
+,Lab07-02.exe,malicious,malicious|suspicious,network_indicator,"Opens an advertising URL through COM"
+,Lab07-03.exe,malicious,malicious|suspicious,file_write;discovery,"Copies a DLL as kerne132.dll and patches imports of every .exe on C:"
+,Lab07-03.dll,malicious,malicious|suspicious,dll;network;network_indicator;mutex;execution,"Backdoor with a hardcoded IP"
+,Lab11-01.exe,malicious,malicious|suspicious,embedded_payload;persistence;registry;file_write,"Drops a GINA DLL from a resource and registers it to capture credentials"
+,Lab11-02.dll,malicious,malicious|suspicious,dll;persistence;registry;injection,"AppInit_DLLs persistence; hooks send() in mail clients"
+,Lab11-03.exe,malicious,malicious|suspicious,persistence;file_write;keylogging,"Trojanizes a system service binary; the keylogger lives in the dropped DLL"
+,Lab12-01.exe,malicious,malicious|suspicious,injection;dynamic_resolution,"Injects a DLL into explorer.exe with CreateRemoteThread and LoadLibrary"
+,Lab12-02.exe,malicious,malicious|suspicious,injection;embedded_payload;encoding,"Process replacement into svchost.exe with an XOR-encoded resource"
+,Lab12-03.exe,malicious,malicious|suspicious,keylogging,"Keylogger using SetWindowsHookEx"
+,Lab12-04.exe,malicious,malicious|suspicious,injection;embedded_payload;privilege;download;file_write,"Injects into winlogon.exe to disable file protection, drops a resource and downloads an update"
+,Lab13-01.exe,malicious,malicious|suspicious,network;encoding;embedded_payload,"Beacons with an encoded value; XOR-encoded resource string"
+,Lab13-02.exe,malicious,malicious|suspicious,encoding;file_write,"Encrypts screenshots and writes them to temp files"
+,Lab13-03.exe,malicious,malicious|suspicious,network;encoding;execution,"Reverse shell with AES and a custom Base64 alphabet"

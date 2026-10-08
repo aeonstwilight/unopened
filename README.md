@@ -138,6 +138,24 @@ unopened triage suspicious.bin --reputation
 - Verdict rules V-REP-01 to V-REP-03 use the answers: known to MalwareBazaar or 5 or
   more VirusTotal engines means malicious; 1 to 4 engines means suspicious (low).
 
+## Validation (for maintainers)
+
+`scripts/validate.py` runs triage over a folder of samples and compares the results with
+an expectations CSV, writing `validation-results/results.csv` and
+`validation-results/summary.md` (verdicts by label, behavior coverage, misses, false
+positives, incomplete checks, runtime). Run it **only inside an isolated analysis VM**
+when the folder holds real malware.
+
+```sh
+python scripts/validate.py ~/samples/pma --expectations validation/pma-labs.csv \
+    -- --capa-rules ~/rules/capa --yara-rules ~/rules/yara
+python scripts/validate.py ~/corpus --label benign      # false-positive run
+python scripts/validate.py --list-behaviors             # labels for the CSV
+```
+
+The outputs hold labels and rule IDs, never raw indicators; `--keep-reports` also keeps
+the full JSON reports, which do contain raw values under `raw` keys.
+
 ## Hunt queries
 
 Every report ends with ready-made searches for the file's hashes and names (including

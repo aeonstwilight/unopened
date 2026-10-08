@@ -99,8 +99,8 @@ Goal: prove the tool is useful on real files, not only correct on synthetic fixt
 
 ### Harness
 
-- `scripts/validate.py` takes a directory of samples (or of zips) and an expectations CSV (`sha256,label,expected_verdict,expected_behaviors`), runs triage on each file with JSON output, and writes `validation-results.csv` plus a summary table. It prints counts and rule IDs only, never raw indicators.
-- The PMA expectations CSV is written by hand from the walkthroughs and committed under `validation/`. It holds hashes and behavior labels only, no sample bytes.
+- `scripts/validate.py` (logic in `src/unopened/validation.py`, so the safety tests cover it) takes a sample file or directory and an optional expectations CSV (`sha256,name,label,expected_verdict,expected_behaviors,notes`), runs triage on each file in-process with JSON output and hunt queries off, and writes `validation-results/results.csv` and `validation-results/summary.md`. Samples inside archives are matched to their own rows. Outputs carry counts, finding IDs, rule IDs and behavior labels only, never raw indicators. Reputation lookups are refused.
+- The PMA expectations CSV (`validation/pma-labs.csv`) is a draft written from the walkthroughs; verify each row against the book's Appendix C and fill in hashes before relying on it. It holds hashes and behavior labels only, no sample bytes.
 - Every miss or false positive ends as one of: a fix with a synthetic regression test, a documented limitation in the README, or an entry under "Not checked".
 
 ### Done when
