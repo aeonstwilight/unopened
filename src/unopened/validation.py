@@ -118,10 +118,11 @@ BEHAVIORS: dict[str, tuple[str, Callable[[Evidence], bool]]] = {
     "network_indicator": ("A URL, domain or IP address to pivot on",
                           lambda e: bool(e.indicator_types & NETWORK_TYPES)),
     "download": ("Downloads content", lambda e: e.imports("URLDownloadTo")
-        or e.capa("download") or e.found("script.download_execute")),
+        or e.capa("download") or e.found("script.download_execute", "behavior.download_execute")),
     "persistence": ("Persistence (Run key, service, startup)", lambda e: "persistence"
         in e.import_categories or e.found("indicators.persistence_registry")
-        or e.ns("persistence/") or "Persistence" in e.attack_tactics),
+        or e.ns("persistence/") or "Persistence" in e.attack_tactics
+        or e.found("behavior.run_key_persistence")),
     "service": ("Installs or changes a service", lambda e: e.imports(
         "CreateService", "ChangeServiceConfig", "StartServiceCtrlDispatcher")
         or e.capa("service")),
@@ -133,7 +134,8 @@ BEHAVIORS: dict[str, tuple[str, Callable[[Evidence], bool]]] = {
     "execution": ("Starts programs or commands", lambda e: "execution" in e.import_categories
         or e.capa("create process", "execute shell command")),
     "keylogging": ("Keystroke capture", lambda e: "input_capture" in e.import_categories
-        or e.ns("collection/keylog") or e.capa("keystroke", "keylog")),
+        or e.ns("collection/keylog") or e.capa("keystroke", "keylog")
+        or e.found("behavior.keylogger")),
     "anti_analysis": ("Debugger or VM detection", lambda e: "anti_analysis"
         in e.import_categories or e.ns("anti-analysis/")),
     "encoding": ("Encodes or encrypts data", lambda e: "crypto" in e.import_categories

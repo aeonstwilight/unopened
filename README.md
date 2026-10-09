@@ -120,6 +120,29 @@ reported as not run, never as "no matches".
 Exit codes: `0` report written (whatever it found), `2` usage, configuration or
 output-write error, `3` the input could not be read or was too large.
 
+## Behavior patterns
+
+Most single signals (an embedded program, a download, a resolved API) are common in
+legitimate software, so they are reported at LOW. `src/unopened/data/behaviors.toml`
+names combinations that, together, describe what malware does, and adds one finding
+when all parts are present, citing the exact evidence.
+
+| Pattern | Fires when | Severity |
+|---|---|---|
+| Reverse shell | capa: create reverse shell | HIGH |
+| Keystroke logging | capa: log keystrokes | HIGH |
+| Collects files and uploads them | unsigned + enumerates files + sends files over HTTP | HIGH |
+| Shellcode-style API loading | no import table + walks loader structures or parses exports | HIGH |
+| Hidden strings and runtime-resolved APIs | unsigned + stack strings + many runtime-linked functions | HIGH |
+| Drops an embedded program | unsigned + embedded PE + extracts a resource + writes a file | MEDIUM |
+| Downloads and runs a file | unsigned + downloads + writes and runs or starts a process | MEDIUM |
+| Starts itself through a Run key | capa: persist via Run registry key | MEDIUM |
+| Deletes itself | capa: self delete | MEDIUM |
+
+"Unsigned" means a positive not-signed result. If the signature could not be checked,
+those patterns do not fire and the report says so. Patterns likely to match legitimate
+unsigned installers start at MEDIUM and are promoted only after the benign-corpus run.
+
 ## Hash reputation (opt-in)
 
 ```sh

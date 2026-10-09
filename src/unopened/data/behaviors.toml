@@ -1,0 +1,88 @@
+# Behavior patterns: combinations of signals that, together, describe what malware does.
+#
+# Each signal on its own is common in legitimate software, so analyzers report most of
+# them at LOW. A pattern fires only when every group under `all` is satisfied, and then
+# adds one finding that names the pattern and cites the exact evidence. These are fixed,
+# documented rules, not a model, and the verdict rules treat the result like any other
+# finding of that severity.
+#
+# Signals:
+#   capa:NAME        a capa capability with exactly this name
+#   capa~TEXT        a capa capability whose name contains TEXT (case-insensitive)
+#   finding:ID       a finding with this ID from any analyzer
+#
+# `all` is a list of groups; each group is satisfied when any one of its signals is
+# present. `unsigned = true` also requires a positive "not digitally signed" result; if the
+# signature could not be checked, the pattern does not fire and the report says so.
+#
+# Severity was set during M5 validation. Patterns most likely to match legitimate unsigned
+# installers and updaters start at MEDIUM and are promoted only if the benign-corpus run
+# shows they stay quiet on normal software.
+
+[reverse_shell]
+title = "Reverse shell"
+severity = "high"
+description = "Connects out and hands a command shell to the remote side."
+all = [["capa:create reverse shell"]]
+
+[keylogger]
+title = "Keystroke logging"
+severity = "high"
+description = "Records what the user types."
+all = [["capa~log keystrokes"]]
+
+[file_stealer]
+title = "Collects files and uploads them"
+severity = "high"
+description = "Walks the file system and sends files to a web server."
+unsigned = true
+all = [["capa:enumerate files on Windows"], ["capa:send file via HTTP"]]
+
+[shellcode_loader]
+title = "Shellcode-style API loading"
+severity = "high"
+description = "Has no import table and finds Windows functions by walking loader structures in memory, a technique used to hide what a program calls."
+all = [
+    ["finding:pe.no_imports"],
+    ["capa:access PEB ldr_data", "capa:resolve function by parsing PE exports"],
+]
+
+[hidden_strings_and_apis]
+title = "Hidden strings and runtime-resolved APIs"
+severity = "high"
+description = "Builds its strings on the stack and looks up many functions at run time, so neither shows in a plain inspection."
+unsigned = true
+all = [["capa:contain obfuscated stackstrings"], ["capa:link many functions at runtime"]]
+
+[dropper]
+title = "Drops an embedded program"
+severity = "medium"
+description = "Carries another program inside it, extracts it from a resource and writes it to disk. Unsigned installers do this too."
+unsigned = true
+all = [
+    ["capa:contain an embedded PE file"],
+    ["capa:extract resource via kernel32 functions"],
+    ["capa:write file on Windows"],
+]
+
+[download_execute]
+title = "Downloads and runs a file"
+severity = "medium"
+description = "Downloads content, writes it to disk and runs it. Unsigned updaters do this too."
+unsigned = true
+all = [
+    ["capa:download and write a file", "capa:download URL"],
+    ["capa:write and execute a file", "capa:create process on Windows", "capa:execute command"],
+]
+
+[run_key_persistence]
+title = "Starts itself through a Run key"
+severity = "medium"
+description = "Adds itself to a registry Run key so it starts at every logon."
+all = [["capa:persist via Run registry key"]]
+
+[self_delete]
+title = "Deletes itself"
+severity = "medium"
+description = "Removes its own file after running, which hides it from later inspection."
+all = [["capa:self delete"]]

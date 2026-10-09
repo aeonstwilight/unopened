@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from . import __version__
+from . import __version__, behaviors
 from .analyzers import Context, Options, registry
 from .analyzers.strings import summarize_indicators
 from .extraction import Budget, basename
@@ -200,6 +200,10 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
         source = next(s for s in MEMBER_SOURCES if s in by_name and any(
             c["source"] == s for c in children))
         by_name[source].findings += container_findings(children)
+
+    # Combinations of signals across analyzers (data/behaviors.toml).
+    results.append(behaviors.evaluate(results))
+    titles["behavior"] = "Behavior patterns (combinations of signals)"
 
     report = Report(
         tool_version=__version__,
