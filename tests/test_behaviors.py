@@ -148,3 +148,32 @@ def test_verdicts(make_file, fixtures, monkeypatch):
     # A MEDIUM pattern alone is not: droppers wait for the benign-corpus run.
     assert triage_with(list(CASES["dropper"][0]))["value"] == "no findings"
     assert triage_with([])["value"] == "no findings"
+
+
+# Valid signature tempers a lone YARA match ----------------------------------------------
+
+def _yara_results(valid):
+    from unopened.model import AnalyzerResult
+    return [
+        AnalyzerResult("authenticode", Status.OK, data={"signed": True, "valid": valid}),
+        AnalyzerResult("yara", Status.OK, findings=[
+            Finding("yara.match", Severity.HIGH, "YARA rule matched: X", "d"),
+            Finding("yara.match", Severity.MEDIUM, "YARA rule matched: Y", "d")]),
+    ]
+
+
+def test_valid_signature_caps_yara_at_medium():
+    from unopened.pipeline import temper_for_valid_signature
+    rs = _yara_results(valid=True)
+    temper_for_valid_signature(rs)
+    high, medium = rs[1].findings
+    assert high.severity == Severity.MEDIUM and "valid Authenticode signature" in high.detail
+    assert medium.severity == Severity.MEDIUM and medium.detail == "d"
+
+
+@pytest.mark.parametrize("valid", [False, None])
+def test_invalid_or_unverified_signature_leaves_yara_alone(valid):
+    from unopened.pipeline import temper_for_valid_signature
+    rs = _yara_results(valid=valid)
+    temper_for_valid_signature(rs)
+    assert rs[1].findings[0].severity == Severity.HIGH

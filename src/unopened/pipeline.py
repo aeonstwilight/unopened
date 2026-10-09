@@ -201,6 +201,7 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
             c["source"] == s for c in children))
         by_name[source].findings += container_findings(children)
 
+    temper_for_valid_signature(results)
     # Combinations of signals across analyzers (data/behaviors.toml).
     results.append(behaviors.evaluate(results))
     titles["behavior"] = "Behavior patterns (combinations of signals)"
@@ -222,6 +223,29 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
     )
     report.verdict = evaluate(report)
     return report
+
+
+SIGNED_YARA_NOTE = (
+    " The file carries a valid Authenticode signature, so this single rule match is "
+    "rated MEDIUM rather than HIGH: in M5 validation, YARA rules matched signed Microsoft "
+    "tools. Review the rule; a valid signature is not proof of safety, since signing "
+    "certificates are sometimes stolen."
+)
+
+
+def temper_for_valid_signature(results: list[AnalyzerResult]) -> None:
+    """A lone HIGH YARA match on a validly signed file becomes MEDIUM, with a note.
+    Other evidence, including behavior patterns, is unchanged."""
+    sig = next((r for r in results if r.name == "authenticode"), None)
+    if sig is None or not (sig.data or {}).get("valid"):
+        return
+    for r in results:
+        if r.name != "yara":
+            continue
+        for i, f in enumerate(r.findings):
+            if f.id == "yara.match" and f.severity == Severity.HIGH:
+                r.findings[i] = Finding(f.id, Severity.MEDIUM, f.title,
+                                        f.detail + SIGNED_YARA_NOTE, f.source)
 
 
 def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
