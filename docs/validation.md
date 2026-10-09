@@ -24,7 +24,7 @@ numbers can be reproduced and challenged.
 | Set | Files | Ground truth |
 |---|---|---|
 | RPISEC Malware course labs | 17 PE samples in 9 zipped labs | Each lab's `solution.md` ([RPISEC/Malware](https://github.com/RPISEC/Malware), credited in `validation/rpisec-labs.csv`) |
-| Benign corpus | _pending_ | Ordinary Windows software: Sysinternals Suite, the Python 3.12 embeddable build, the 7-Zip 24.08 installer, PuTTY |
+| Benign corpus | 201 files | Ordinary Windows software: Sysinternals Suite, the Python 3.12 embeddable build, the 7-Zip 24.08 installer, PuTTY |
 | Current samples (holdout) | _not yet run_ | MalwareBazaar tags; samples the rules were not written against |
 
 ## Results: RPISEC labs
@@ -74,7 +74,41 @@ numbers.
 
 ## Results: benign corpus
 
-_Pending._
+201 files: the Sysinternals Suite (Microsoft-signed admin tools that read process memory,
+adjust privileges and manage services by design), the Python 3.12 embeddable build, the
+7-Zip 24.08 installer and PuTTY. The target was no malicious verdicts and suspicious on
+fewer than 5% of files.
+
+| Run | Malicious | Suspicious | False-positive rate |
+|---|---|---|---|
+| 1. After the RPISEC fixes and behavior patterns | 4 | 62 | **32.8%** (66 of 201) |
+| 2. After the fixes below | _pending_ | _pending_ | _pending_ |
+
+**Run 1 failed the target badly.** Diagnostics on 13 representative files found four
+causes:
+
+1. **Post-quantum signatures broke signature checking.** Every Microsoft-signed file in
+   the corpus includes a certificate with an ML-DSA-87 public key. The ASN.1 library under
+   signify maps key types through a fixed table, raised `KeyError` on the unknown
+   identifier, and the whole file was reported as "signature failed verification"
+   (MEDIUM), so the strongest evidence of legitimacy turned into evidence against it.
+   `src/unopened/asn1_compat.py` now registers the ML-DSA and SLH-DSA identifiers so the
+   RSA signature beside them verifies; PsExec, BgInfo and PuTTY then verified as OK.
+2. **capa's ATT&CK tactic summaries were MEDIUM.** Defense Evasion, Persistence and
+   Privilege Escalation summaries appeared on nearly every admin tool, and three MEDIUM
+   findings make a file suspicious (V-SUS-04). They are LOW now; specific capabilities
+   carry weight through behavior patterns instead.
+3. **Two behavior patterns fired on signed tools.** "Keystroke logging" matched TCPView,
+   VMMap and Autoruns (GUI programs check key state for hotkeys) and "Reverse shell"
+   matched PuTTY, a remote shell client by design. Both now require an unsigned file; on
+   a signed file the evidence is still shown, at LOW.
+4. **YARA rules matched signed Microsoft tools at score 75**, which made them malicious:
+   an auto-generated Snake rule on BgInfo, a RisePro rule on handle.exe, and a rule that
+   detects .NET single-file bundles on RDCMan. A lone HIGH YARA match on a file with a
+   valid signature is now MEDIUM, with a note that certificates can be stolen.
+
+The dropper pattern stays at MEDIUM until run 2 shows how it behaves on the 7-Zip
+installer.
 
 ## Runtime
 
