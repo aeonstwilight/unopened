@@ -176,6 +176,11 @@ python scripts/validate.py ~/corpus --label benign      # false-positive run
 python scripts/validate.py --list-behaviors             # labels for the CSV
 ```
 
+capa is slow on large programs (minutes each in a VM) and single-threaded, so set
+`--jobs` to the VM's CPU count (`nproc`). Results are written to `results.csv` as each
+file finishes; after an interruption, rerun with `--resume` to skip the files already
+done.
+
 The outputs hold labels and rule IDs, never raw indicators; `--keep-reports` also keeps
 the full JSON reports, which do contain raw values under `raw` keys.
 

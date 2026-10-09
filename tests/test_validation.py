@@ -163,3 +163,44 @@ def test_full_import_list_counts_for_behaviors(tmp_path, fixtures):
     out = tmp_path / "out"
     assert validation.main([str(d), "--expectations", str(exp), "--out", str(out)]) == 0
     assert rows(out)[0]["found"] == "file_write"
+
+
+def _verdicts(out):
+    return sorted((r["file"], r["sample"], r["verdict"], r["found"]) for r in rows(out))
+
+
+def test_parallel_jobs_match_sequential(tmp_path, samples):
+    seq, par = tmp_path / "seq", tmp_path / "par"
+    assert validation.main([str(samples), "--out", str(seq)]) == 0
+    assert validation.main([str(samples), "--out", str(par), "--jobs", "2"]) == 0
+    assert _verdicts(seq) == _verdicts(par)
+
+
+def test_resume_skips_files_already_done(tmp_path, samples, capsys):
+    out = tmp_path / "out"
+    assert validation.main([str(samples), "--out", str(out)]) == 0
+    full = _verdicts(out)
+    # Simulate an interrupted run: keep only the first file's rows.
+    lines = (out / "results.csv").read_text().splitlines()
+    first = lines[1].split(",")[0]
+    (out / "results.csv").write_text(
+        "\n".join([lines[0]] + [ln for ln in lines[1:] if ln.startswith(first + ",")]) + "\n")
+    capsys.readouterr()
+    assert validation.main([str(samples), "--out", str(out), "--resume"]) == 0
+    err = capsys.readouterr().err
+    assert "resuming: 1 file(s) already done" in err
+    assert f"triage {first}" not in err
+    assert _verdicts(out) == full
+
+
+def test_results_are_written_as_files_finish(tmp_path, samples, monkeypatch):
+    out = tmp_path / "out"
+    seen = []
+    real = validation.append_csv
+
+    def spy(rs, path):
+        real(rs, path)
+        seen.append(len(path.read_text().splitlines()))
+    monkeypatch.setattr(validation, "append_csv", spy)
+    assert validation.main([str(samples), "--out", str(out)]) == 0
+    assert seen == sorted(seen) and len(seen) == 3  # one append per file, growing
