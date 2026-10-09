@@ -57,6 +57,9 @@ def unsupported_algorithm(error: BaseException | None) -> str | None:
 
 def analyze_authenticode(ctx: Context) -> AnalyzerOutput:
     try:
+        from .. import asn1_compat
+
+        asn1_compat.apply()  # ML-DSA / SLH-DSA keys must not stop RSA verification
         from signify.authenticode import AuthenticodeFile, AuthenticodeVerificationResult
     except Exception as exc:  # e.g. oscrypto cannot find or recognize libcrypto
         raise AnalyzerUnavailable(
