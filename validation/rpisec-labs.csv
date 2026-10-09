@@ -1,0 +1,28 @@
+# Expectations for the RPISEC Malware course labs (github.com/RPISEC/Malware, Labs/).
+# Written from each lab's solution.md; no sample was handled to write this file.
+# The samples are inside Lab_NN/Lab_NN.zip (password: infected) and named
+# Lab_NN-N.malware; rows match those names. Run with --include '*.zip' --label malicious
+# so the lab PDFs and solution.md files are skipped and unlisted samples still count.
+# Behaviors describe what the sample does, not only what static analysis can see; the
+# notes say which ones are expected to be hidden by packing or runtime decoding.
+# Lab_07: solution not reviewed yet; its samples are counted as malicious with no
+# behavior expectations. Lab_10 holds kernel drivers, out of scope for behaviors.
+# Labels: python scripts/validate.py --list-behaviors
+sha256,name,label,expected_verdict,expected_behaviors,notes
+,Lab_01-1.malware,malicious,malicious|suspicious,network;network_indicator;execution,"Backdoor: socket APIs, ShellExecuteEx, hardcoded IP and URL; deletes itself"
+,Lab_01-2.malware,malicious,malicious|suspicious,network;network_indicator;execution,"Backdoor: HTTP APIs, CreateProcess, hardcoded IP, pseudo-shell commands"
+,Lab_01-3.malware,malicious,malicious|suspicious,packed;network_indicator,"UPX variant that UPX cannot unpack; few imports; URL and user agent visible"
+,Lab_02-1.malware,malicious,malicious|suspicious,network;network_indicator,"Uploads local files over HTTP POST to a hardcoded host; FindFirstFile enumeration"
+,Lab_02-2.malware,malicious,malicious|suspicious,keylogging,"GetAsyncKeyState keylogger writing to a file and emailing the log"
+,Lab_03-1.malware,malicious,malicious|suspicious,embedded_payload;anti_analysis;network_indicator;persistence,"Drops a DLL from a resource, registers it as a Browser Helper Object; IsDebuggerPresent"
+,Lab_03-2.malware,malicious,malicious|suspicious,network;network_indicator;persistence;registry;execution;discovery;encoding,"RAT: Run key, process listing, remote shell over a pipe, XOR 0x55 traffic"
+,Lab_04-1.malware,malicious,malicious|suspicious,persistence;registry;dynamic_resolution;file_write,"Copies itself to the Windows folder and sets a Run key; resolves APIs at runtime"
+,Lab_04-2.malware,malicious,malicious|suspicious,packed;encoding,"UPX packed crackme; nibble-swap and XOR check (encoding is an expected miss while packed)"
+,Lab_05-1.malware,malicious,malicious|suspicious,keylogging;embedded_payload;mutex,"Low-level keyboard hook keylogger; DROP resource replaces GoogleUpdate.exe; mutex"
+,Lab_05-2.malware,malicious,malicious|suspicious,download;network_indicator;embedded_payload,"Downloads a replacement for a Mozilla service binary, DROP resource as fallback; reads password fields"
+,Lab_06-1.malware,malicious,malicious|suspicious,dynamic_resolution;embedded_payload;encoding;anti_analysis;injection;execution,"Appended data decoded at runtime; strings decoded at runtime (anti-analysis strings are an expected miss); writes into a child process"
+,Lab_08-1.malware,malicious,malicious|suspicious,anti_analysis;persistence;file_write,"Anti-disassembly, IsDebuggerPresent, rdtsc; Startup-folder batch file (a Startup-folder path is not yet a persistence signal)"
+,Lab_09-1.malware,malicious,malicious|suspicious,packed,"Custom packer that PEiD reports as UPX"
+,Lab_09-2.malware,malicious,malicious|suspicious,packed,"PEtite packed, .petite section, very few imports"
+,Lab_09-3.malware,malicious,malicious|suspicious,packed,"Unknown packer; NULLs its PE header after unpacking"
+,Lab_10-2.malware,malicious,,,"Kernel driver hooking the IDT; out of scope for behaviors"

@@ -216,7 +216,10 @@ class ExpectationIndex:
         self.used: set[int] = set()
 
     def find(self, sha256: str, name: str) -> Expectation | None:
-        hit = self.by_sha.get(sha256.lower()) or self.by_name.get(name.lower())
+        # Archive members keep their folder ("Lab_01/Lab_01-1.malware"); match the base name.
+        base = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
+        hit = (self.by_sha.get(sha256.lower()) or self.by_name.get(name.lower())
+               or self.by_name.get(base))
         if hit:
             self.used.add(id(hit))
         return hit
@@ -250,12 +253,13 @@ class Result:
     notes: str = ""
 
 
-def iter_samples(root: Path) -> Iterator[Path]:
+def iter_samples(root: Path, include: list[str] | None = None) -> Iterator[Path]:
     if root.is_file():
         yield root
         return
     for path in sorted(root.rglob("*")):
-        if path.is_file() and not path.is_symlink():
+        if path.is_file() and not path.is_symlink() \
+                and (not include or any(path.match(p) for p in include)):
             yield path
 
 
@@ -319,11 +323,11 @@ def evaluate(file: str, report: dict[str, Any], sample: str, exp: Expectation | 
 
 
 def validate(samples: Path, index: ExpectationIndex, default_label: str,
-             triage_args: list[str], keep: Path | None,
+             triage_args: list[str], keep: Path | None, include: list[str] | None = None,
              progress: Callable[[str], None] = lambda s: None) -> tuple[list[Result], list[str]]:
     results: list[Result] = []
     failures: list[str] = []
-    for path in iter_samples(samples):
+    for path in iter_samples(samples, include):
         rel = path.name if samples.is_file() else str(path.relative_to(samples))
         progress(rel)
         start = time.perf_counter()
@@ -475,6 +479,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keep-reports", action="store_true",
                    help="also keep each JSON report in OUT/reports (JSON reports contain raw "
                         "indicator values under 'raw' keys)")
+    p.add_argument("--include", action="append", metavar="GLOB",
+                   help="only triage files whose name matches GLOB (for example '*.zip'); "
+                        "repeatable; default: every file")
     p.add_argument("--list-behaviors", action="store_true",
                    help="print the behavior labels usable in the expectations CSV and exit")
     return p
@@ -510,7 +517,7 @@ def main(argv: list[str] | None = None) -> int:
         keep.mkdir(exist_ok=True)
     index = ExpectationIndex(rows)
     results, failures = validate(
-        args.samples, index, args.label, triage_args, keep,
+        args.samples, index, args.label, triage_args, keep, include=args.include,
         progress=lambda name: print(f"triage {name}", file=sys.stderr))
     write_csv(results, args.out / "results.csv")
     (args.out / "summary.md").write_text(

@@ -128,3 +128,25 @@ def test_every_behavior_has_a_working_test():
     empty = Evidence()
     for name, (title, test) in BEHAVIORS.items():
         assert title and test(empty) is False, name
+
+
+def test_rpisec_expectations_file_is_valid():
+    rows_ = load_expectations(ROOT / "validation" / "rpisec-labs.csv")
+    assert len(rows_) >= 15
+    assert all(r.name.endswith(".malware") for r in rows_)
+
+
+def test_member_in_subfolder_matches_base_name_and_include_filter(tmp_path, fixtures, arch_fx):
+    d = tmp_path / "Labs" / "Lab_01"
+    d.mkdir(parents=True)
+    (d / "Lab_01.zip").write_bytes(
+        arch_fx.zip_crypto({"Lab_01/Lab_01-1.malware": fixtures.suspicious_exe()}))
+    (d / "solution.md").write_text("# not a sample\n")
+    exp = write(tmp_path / "e.csv", HEADER + ",Lab_01-1.malware,malicious,,injection,\n")
+    out = tmp_path / "out"
+    assert validation.main([str(tmp_path / "Labs"), "--expectations", str(exp), "--out",
+                            str(out), "--include", "*.zip", "--label", "malicious"]) == 0
+    got = rows(out)
+    assert [r["file"] for r in got] == ["Lab_01/Lab_01.zip"]
+    assert got[0]["found"] == "injection"
+    assert "no matching sample" not in (out / "summary.md").read_text()
