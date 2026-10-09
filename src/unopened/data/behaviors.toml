@@ -15,6 +15,10 @@
 # present. `unsigned = true` also requires a positive "not digitally signed" result; if the
 # signature could not be checked, the pattern does not fire and the report says so.
 #
+# A pattern marked `unsigned` that matches a signed file is still reported, at LOW, so the
+# evidence stays visible. In M5 validation, keystroke and reverse-shell capabilities fired
+# on signed tools such as TCPView, Autoruns and PuTTY (a remote shell client by design).
+#
 # Severity was set during M5 validation. Patterns most likely to match legitimate unsigned
 # installers and updaters start at MEDIUM and are promoted only if the benign-corpus run
 # shows they stay quiet on normal software.
@@ -23,12 +27,14 @@
 title = "Reverse shell"
 severity = "high"
 description = "Connects out and hands a command shell to the remote side."
+unsigned = true
 all = [["capa:create reverse shell"]]
 
 [keylogger]
 title = "Keystroke logging"
 severity = "high"
 description = "Records what the user types."
+unsigned = true
 all = [["capa~log keystrokes"]]
 
 [file_stealer]

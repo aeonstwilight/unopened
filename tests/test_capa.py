@@ -43,7 +43,8 @@ def test_capability_with_attack_mapping(make_file, fixtures):
                               "id": "T1055"}]
     assert cap["mbc"] == ["Defense Evasion::Process Injection [E1055]"]
     titles = {f.title: f.severity for f in r.findings}
-    assert titles["capa: Defense Evasion (1 capability)"] == Severity.MEDIUM
+    # Tactic summaries are LOW (M5: they fired on nearly every signed admin tool).
+    assert titles["capa: Defense Evasion (1 capability)"] == Severity.LOW
 
 
 def test_no_match_on_benign(make_file, fixtures):

@@ -89,8 +89,9 @@ def evaluate(results: list[AnalyzerResult],
     capa = {c["name"] for c in (capa_result.data.get("capabilities", [])
                                 if capa_result and capa_result.status == Status.OK else [])}
     sig = by_name.get("authenticode")
-    sig_known = sig is not None and sig.status == Status.OK
+    signed_flag = (sig.data or {}).get("signed") if sig is not None else None
     unsigned = "sig.unsigned" in finding_ids
+    signed = signed_flag is True
 
     out = AnalyzerResult(SOURCE, Status.OK, data={"matched": [], "blocked_by_signature": []})
     for p in pattern_list:
@@ -101,16 +102,20 @@ def evaluate(results: list[AnalyzerResult],
                 break
             evidence.append(hit)
         else:
+            severity, note = p.severity, "; not digitally signed" if p.unsigned else ""
             if p.unsigned and not unsigned:
-                if not sig_known:
+                if not signed:
                     out.data["blocked_by_signature"].append(p.id)
-                continue
-            out.data["matched"].append({"id": p.id, "evidence": evidence})
+                    continue
+                # Signed: keep the evidence visible, but it no longer drives the verdict.
+                severity = Severity.LOW
+                note = ("; the file is signed, so this counts only as a lead (legitimate "
+                        "signed tools do this too, and signatures can be stolen)")
+            out.data["matched"].append({"id": p.id, "evidence": evidence,
+                                        "severity": str(severity)})
             out.findings.append(Finding(
-                f"behavior.{p.id}", p.severity, f"Behavior: {p.title}",
-                f"{p.description} Evidence: {'; '.join(evidence)}"
-                + ("; not digitally signed" if p.unsigned else "") + ".",
-                SOURCE,
+                f"behavior.{p.id}", severity, f"Behavior: {p.title}",
+                f"{p.description} Evidence: {'; '.join(evidence)}{note}.", SOURCE,
             ))
     if out.data["blocked_by_signature"]:
         out.not_checked.append(

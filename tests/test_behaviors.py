@@ -21,9 +21,13 @@ def results(capa=(), findings=(), signed: bool | None = False, capa_ok=True):
         data={"capabilities": [{"name": c} for c in capa]} if capa_ok else {}))
     if signed is None:
         out.append(AnalyzerResult("authenticode", Status.UNAVAILABLE))
+    elif signed == "unverifiable":
+        # Signature present, verifier failed (M5: ML-DSA signatures on Microsoft binaries).
+        out.append(AnalyzerResult("authenticode", Status.PARTIAL, data={"signed": True},
+                                  findings=[Finding("sig.not_verified", Severity.INFO, "x")]))
     else:
         sig = "sig.valid" if signed else "sig.unsigned"
-        out.append(AnalyzerResult("authenticode", Status.OK,
+        out.append(AnalyzerResult("authenticode", Status.OK, data={"signed": signed},
                                   findings=[Finding(sig, Severity.INFO, sig)]))
     return out
 
@@ -71,11 +75,15 @@ def test_partial_evidence_does_not_fire(pid):
         assert pid not in matched(rs)
 
 
-def test_signed_file_does_not_trip_unsigned_only_patterns():
+@pytest.mark.parametrize("signed", [True, "unverifiable"])
+def test_signed_file_keeps_unsigned_only_evidence_at_low(signed):
     capa, _, _ = CASES["dropper"]
-    assert "dropper" not in matched(results(capa, signed=True))
-    # A pattern without the unsigned guard still fires on a signed file.
-    assert "reverse_shell" in matched(results(["create reverse shell"], signed=True))
+    assert matched(results(capa, signed=signed))["dropper"] == Severity.LOW
+    # M5: keystroke and reverse-shell capabilities fired on signed TCPView and PuTTY.
+    for pid in ("keylogger", "reverse_shell"):
+        assert matched(results(CASES[pid][0], signed=signed))[pid] == Severity.LOW
+    # Patterns without the guard keep their severity on signed files.
+    assert matched(results(["self delete"], signed=True))["self_delete"] == Severity.MEDIUM
 
 
 def test_unknown_signature_blocks_and_says_so():
@@ -94,7 +102,9 @@ def test_capa_not_running_is_noted():
 def test_evidence_is_cited():
     (f,) = behaviors.evaluate(results(["create reverse shell"])).findings
     assert f.source == "behavior" and f.title == "Behavior: Reverse shell"
-    assert "capa: create reverse shell" in f.detail
+    assert "capa: create reverse shell" in f.detail and "not digitally signed" in f.detail
+    (g,) = behaviors.evaluate(results(["create reverse shell"], signed=True)).findings
+    assert "the file is signed" in g.detail
 
 
 def test_substring_match_names_the_capability():

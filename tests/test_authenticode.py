@@ -97,3 +97,31 @@ def test_verification_outcomes(make_file, fixtures, monkeypatch, result_name, se
     assert r.findings[0].severity == severity
     assert r.findings[0].title.startswith(title)
     assert r.data["valid"] is (result_name == "OK")
+
+
+@needs_signify
+def test_post_quantum_signature_is_not_evidence(make_file, fixtures, monkeypatch):
+    # M5: every Microsoft-signed benign file carried an ML-DSA-87 signature, which signify
+    # cannot parse, and was reported as a failed (MEDIUM) signature.
+    from signify.authenticode import AuthenticodeFile, AuthenticodeVerificationResult
+
+    monkeypatch.setattr(
+        AuthenticodeFile, "explain_verify",
+        lambda self, **kw: (AuthenticodeVerificationResult.UNKNOWN_ERROR,
+                            KeyError("2.16.840.1.101.3.4.3.19")))
+    r = analyze(make_file("ms.exe", fixtures.fake_signed_exe()))
+    assert r.status == Status.PARTIAL  # loud: the check did not complete
+    assert r.data["signed"] is True and r.data["unsupported_algorithm"] == "ML-DSA-87"
+    (f,) = [f for f in r.findings if f.id.startswith("sig.")]
+    assert f.id == "sig.not_verified" and f.severity == Severity.INFO
+    assert "ML-DSA-87" in f.detail
+
+
+@pytest.mark.parametrize("error, algo", [
+    (KeyError("2.16.840.1.101.3.4.3.17"), "ML-DSA-44"),
+    (ValueError("Signature algorithm not known for 2.16.840.1.101.3.4.3.20"), "SLH-DSA"),
+    (ValueError("Insufficient data - 111 bytes requested"), None),
+    (None, None),
+])
+def test_unsupported_algorithm_detection(error, algo):
+    assert authenticode.unsupported_algorithm(error) == algo
