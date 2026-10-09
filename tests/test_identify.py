@@ -139,3 +139,18 @@ def test_doc_renamed_xls_is_flagged(make_file, office_fx):
     ft = identify(make_file("budget.xls", office_fx.legacy_doc()))
     assert ft.details["vba_project"] is True
     assert any(".xls does not match" in m.message for m in ft.mismatches)
+
+
+@pytest.mark.parametrize("name", ["sample.malware", "a.bin", "b.vir", "c.dat"])
+def test_pe_with_storage_extension_is_low_not_high(make_file, fixtures, name):
+    # Found in M5 validation: lab samples named *.malware were called suspicious on the
+    # name alone. A storage extension is not a disguise; a document extension is.
+    ft = identify(make_file(name, fixtures.benign_exe()))
+    assert [m.severity for m in ft.mismatches] == [Severity.LOW]
+    assert "not a disguise" in ft.mismatches[0].message
+
+
+@pytest.mark.parametrize("name", ["scan.pdf", "photo.jpg", "data.zip", "notes.txt"])
+def test_pe_with_decoy_extension_stays_high(make_file, fixtures, name):
+    ft = identify(make_file(name, fixtures.benign_exe()))
+    assert [m.severity for m in ft.mismatches] == [Severity.HIGH]

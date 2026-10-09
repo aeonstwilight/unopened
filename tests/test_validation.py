@@ -150,3 +150,16 @@ def test_member_in_subfolder_matches_base_name_and_include_filter(tmp_path, fixt
     assert [r["file"] for r in got] == ["Lab_01/Lab_01.zip"]
     assert got[0]["found"] == "injection"
     assert "no matching sample" not in (out / "summary.md").read_text()
+
+
+def test_full_import_list_counts_for_behaviors(tmp_path, fixtures):
+    # Found in M5 validation: CopyFileA is in no import category, so a harness that read
+    # only the categorised imports could never surface file_write from imports.
+    spec = fixtures.PESpec(imports={"kernel32.dll": ["CopyFileA", "ExitProcess"]})
+    d = tmp_path / "s"
+    d.mkdir()
+    (d / "copy.exe").write_bytes(fixtures.build_pe(spec))
+    exp = write(tmp_path / "e.csv", HEADER + ",copy.exe,malicious,,file_write,\n")
+    out = tmp_path / "out"
+    assert validation.main([str(d), "--expectations", str(exp), "--out", str(out)]) == 0
+    assert rows(out)[0]["found"] == "file_write"

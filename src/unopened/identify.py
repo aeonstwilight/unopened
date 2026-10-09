@@ -65,6 +65,13 @@ RUNNABLE = {
     "wsh", "hta", "ps1", "lnk", "jar", "reg", "dll",
 }
 RUNNABLE_KINDS = {"pe", "mz", "lnk", "script"}
+# Extensions that claim a harmless, openable type. A program wearing one of these is
+# disguised. Anything else (".bin", ".vir", ".malware", ".dat") is how samples are stored
+# or transferred, which is worth noting but is not deception.
+DECOY_EXTENSIONS = DOCUMENT_LIKE | {
+    "zip", "rar", "7z", "gz", "tar", "iso", "img", "xml", "json", "eml", "msg", "svg", "webp",
+    "ics", "vcf", "log",
+}
 
 RTLO_LIKE = {"‮", "‭", "‪", "‫", "⁦", "⁧", "⁨"}
 
@@ -325,16 +332,20 @@ def check_name(name: str, file_type: FileType) -> list[Mismatch]:
             Severity.INFO, f"File has no extension; content is {file_type.description}."
         ))
     elif ext not in expected:
-        if file_type.kind in RUNNABLE_KINDS and file_type.kind != "script":
+        runnable = file_type.kind in RUNNABLE_KINDS and file_type.kind != "script"
+        if runnable and ext in DECOY_EXTENSIONS:
             severity = Severity.HIGH
         elif file_type.kind == "script" or ext in DOCUMENT_LIKE:
             severity = Severity.MEDIUM
         else:
             severity = Severity.LOW
+        note = ("" if severity != Severity.LOW or not runnable else
+                " The extension does not claim a harmless file type, so this is not a "
+                "disguise; samples are often stored this way.")
         mismatches.append(Mismatch(
             "identify.extension_mismatch",
             severity,
             f"Extension .{ext} does not match the content: {file_type.description}. "
-            f"Expected one of: {', '.join('.' + e for e in sorted(expected))}.",
+            f"Expected one of: {', '.join('.' + e for e in sorted(expected))}.{note}",
         ))
     return mismatches

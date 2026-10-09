@@ -197,7 +197,7 @@ their members.
 
 | Step | What it does |
 |---|---|
-| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), ZIP, LNK, PDF, 7z, ISO, PowerShell/JavaScript/VBScript/batch (heuristic), text. Flags extension mismatches, double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
+| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), ZIP, LNK, PDF, 7z, ISO, PowerShell/JavaScript/VBScript/batch (heuristic), text. Flags extension mismatches (HIGH when a program wears a document, image or archive extension; LOW for storage names like `.bin` or `.malware`), double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
 | Hashes | MD5, SHA1, SHA256; imphash for PE; TLSH when `py-tlsh` is installed. |
 | PE | Headers, compile timestamp (zeroed, future, implausible, Delphi default), sections with entropy and permissions, packer section names, W+X sections, entry point placement, imports grouped by behavior (`data/pe_imports.toml`), exports, PDB path, overlay, truncation, .NET detection, parser anomalies. |
 | Authenticode | Signature presence and validity (offline, against the Microsoft root list bundled with signify), signer, issuer and timestamp. Revocation is not checked. |

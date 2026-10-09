@@ -84,6 +84,15 @@ def test_persistence_registry_tag():
     assert any(t.startswith("persistence:") for t in hit.tags)
 
 
+def test_browser_helper_object_is_persistence():
+    # Found in M5 validation: a BHO registration path without a hive prefix was extracted
+    # but not recognized as persistence.
+    (hit,) = extract("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\"
+                     "Browser Helper Objects\\{00000000-0000-0000-0000-000000000000}")
+    assert hit.kind == "registry_key"
+    assert any("Browser Helper Object" in t for t in hit.tags)
+
+
 def test_trailing_punctuation_and_brackets():
     assert ("url", "http://example.com/a(b)") in kinds("x http://example.com/a(b), y")
     assert ("url", "http://example.com/a") in kinds("(http://example.com/a)")

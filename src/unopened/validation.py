@@ -91,9 +91,9 @@ def evidence_of(report: dict[str, Any], include_members: bool = True) -> Evidenc
         ev.capa_names.add(cap.get("name", ""))
         ev.capa_namespaces.add(cap.get("namespace", ""))
         ev.attack_tactics.update(a.get("tactic", "") for a in cap.get("attack", []))
-    interesting = (analyzers.get("pe", {}).get("data") or {}).get("imports_of_interest", {})
-    ev.import_categories.update(interesting)
-    ev.imported.update(n for names in interesting.values() for n in names)
+    pe_data = analyzers.get("pe", {}).get("data") or {}
+    ev.import_categories.update(pe_data.get("imports_of_interest", {}))
+    ev.imported.update(n for names in (pe_data.get("imports") or {}).values() for n in names)
     ev.indicator_types.update(i.get("type", "") for i in report.get("indicators", []))
     if include_members:
         for child in report.get("members", []):
@@ -447,6 +447,7 @@ def summary(results: list[Result], failures: list[str], unused: list[Expectation
     if times:
         secs = [t for _, t in times]
         lines += ["", "## Runtime", "",
+                  "Per file triaged (an archive counts once, including its members).", "",
                   f"{len(secs)} file(s). Median {statistics.median(secs):.2f}s, "
                   f"slowest {max(secs):.2f}s, total {sum(secs):.1f}s."]
 
