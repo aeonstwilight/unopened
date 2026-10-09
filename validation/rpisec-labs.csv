@@ -1,4 +1,8 @@
 # Expectations for the RPISEC Malware course labs (github.com/RPISEC/Malware, Labs/).
+# Attribution: sample names and behavior summaries are paraphrased from the lab solutions
+# in RPISEC's Malware Analysis course (CSCI 4976, Rensselaer Polytechnic Institute, 2015),
+# by Branden Clark, Austin Ralls and Aaron Sedlacek. Their course materials are shared for
+# educational, non-commercial use. No RPISEC samples or files are included here.
 # Written from each lab's solution.md; no sample was handled to write this file.
 # The samples are inside Lab_NN/Lab_NN.zip (password: infected) and named
 # Lab_NN-N.malware; rows match those names. Run with --include '*.zip' --label malicious
