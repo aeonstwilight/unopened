@@ -121,6 +121,17 @@ capabilities and indicator counts but no indicator values.
 | 1 JavaScript | Only a LOW `eval` finding on a large file | **Limitation** for now: the deobfuscator handles base64, char codes and concatenation, not this |
 | 1 7z | A 15 MB archive declaring a single 961 MB program (file pumping, padding to get past scanner size limits); refused by the per-member limit and reported only as could not analyze | **Fixed**: a program declared past the limit at 20 times or more its compressed size is a HIGH finding, since the padding is itself the evidence |
 
+**Run 2, after the fixes: expected verdict met on 21 of 30** (4 malicious, 17 suspicious,
+0 could not analyze, 9 no findings). The nine left are the ones the table above leaves
+open or documents: the three link-only PDFs, the two MSI installers (now reported as not
+examined), the two macro workbooks, and two scripts (a batch file and a JavaScript file)
+that are now analyzed as scripts but show nothing that reaches the threshold.
+
+Read run 2 with two cautions. These samples shaped the fixes, so it measures whether the
+fixes do what they were written to do, not how the tool does on new malware; that takes a
+fresh holdout set. And the new patterns have not yet been run against the benign corpus,
+so their false-positive cost is unmeasured until they are.
+
 Each fix has a synthetic regression test (`tests/test_holdout_fixes.py`,
 `tests/test_behaviors.py`, `tests/test_pe.py`). Run 2 will be reported next to run 1, not
 in its place, and it is no longer a holdout: these samples shaped the fixes. A fresh
