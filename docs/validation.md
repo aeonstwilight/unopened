@@ -36,6 +36,7 @@ The run was repeated after each change, so the effect of every fix is visible.
 | 1. First run | 3 | 14 | 0 | 16 of 16 | 76% |
 | 2. Name inflation removed | 3 | 4 | 10 | 8 of 16 | 80% |
 | 3. Behavior patterns added | 3 | 8 | 6 | **12 of 16** | **80%** |
+| 4. After the benign-corpus fixes | 3 | 8 | 6 | **12 of 16** | **80%** |
 
 **Run 1 looked better than it was.** Fourteen "suspicious" verdicts rested mostly on one
 finding: the samples are stored as `*.malware`, and a program whose extension doesn't
@@ -51,6 +52,11 @@ MEDIUM findings, and most real signals are LOW on their own.
 combinations such as "enumerates files and sends files over HTTP, unsigned". Four samples
 moved to suspicious: a reverse shell, a file stealer, a shellcode-style loader and a
 sample hiding its strings and API calls.
+
+**Run 4 repeated the labs after the benign-corpus fixes** (quieter capa tactic summaries,
+unsigned-only keystroke and reverse-shell patterns, post-quantum signature handling, the
+signed-file YARA cap). Every verdict and every behavior result matched run 3, so the fixes
+that removed 65 false positives cost no detection on these samples.
 
 ### Remaining misses
 
@@ -124,5 +130,10 @@ Read this number with three limits in mind:
 
 ## Runtime
 
-RPISEC labs, run 3: median 36.5 s per zipped lab (three samples each, capa included),
-slowest 85.3 s, 354 s in total.
+- RPISEC labs, run 4: median 45.7 s per zipped lab (up to three samples each, capa
+  included), slowest 94.4 s.
+- Benign corpus, run 2 (2 parallel jobs in a 2-CPU VM): median 72.9 s per file, 6.5 hours
+  of analysis in total. capa accounts for nearly all of it and hit its 5-minute limit on 15
+  files.
+- **Known issue:** the slowest benign file took 1,356 s, well past the per-analyzer limits
+  (capa 300 s, others 60 s). One check is not stopping on time; to be investigated.
