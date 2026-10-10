@@ -55,6 +55,7 @@ PERSISTENCE_KEYS = {
     "\\currentcontrolset\\services": "service configuration",
     "\\active setup\\installed components": "Active Setup",
     "\\explorer\\shell folders\\startup": "Startup folder location",
+    "\\explorer\\browser helper objects": "Browser Helper Object (loads into Internet Explorer)",
 }
 
 TRAILING_PUNCT = ".,;:!?'\""

@@ -91,9 +91,9 @@ def evidence_of(report: dict[str, Any], include_members: bool = True) -> Evidenc
         ev.capa_names.add(cap.get("name", ""))
         ev.capa_namespaces.add(cap.get("namespace", ""))
         ev.attack_tactics.update(a.get("tactic", "") for a in cap.get("attack", []))
-    interesting = (analyzers.get("pe", {}).get("data") or {}).get("imports_of_interest", {})
-    ev.import_categories.update(interesting)
-    ev.imported.update(n for names in interesting.values() for n in names)
+    pe_data = analyzers.get("pe", {}).get("data") or {}
+    ev.import_categories.update(pe_data.get("imports_of_interest", {}))
+    ev.imported.update(n for names in (pe_data.get("imports") or {}).values() for n in names)
     ev.indicator_types.update(i.get("type", "") for i in report.get("indicators", []))
     if include_members:
         for child in report.get("members", []):
@@ -118,10 +118,11 @@ BEHAVIORS: dict[str, tuple[str, Callable[[Evidence], bool]]] = {
     "network_indicator": ("A URL, domain or IP address to pivot on",
                           lambda e: bool(e.indicator_types & NETWORK_TYPES)),
     "download": ("Downloads content", lambda e: e.imports("URLDownloadTo")
-        or e.capa("download") or e.found("script.download_execute")),
+        or e.capa("download") or e.found("script.download_execute", "behavior.download_execute")),
     "persistence": ("Persistence (Run key, service, startup)", lambda e: "persistence"
         in e.import_categories or e.found("indicators.persistence_registry")
-        or e.ns("persistence/") or "Persistence" in e.attack_tactics),
+        or e.ns("persistence/") or "Persistence" in e.attack_tactics
+        or e.found("behavior.run_key_persistence")),
     "service": ("Installs or changes a service", lambda e: e.imports(
         "CreateService", "ChangeServiceConfig", "StartServiceCtrlDispatcher")
         or e.capa("service")),
@@ -133,7 +134,8 @@ BEHAVIORS: dict[str, tuple[str, Callable[[Evidence], bool]]] = {
     "execution": ("Starts programs or commands", lambda e: "execution" in e.import_categories
         or e.capa("create process", "execute shell command")),
     "keylogging": ("Keystroke capture", lambda e: "input_capture" in e.import_categories
-        or e.ns("collection/keylog") or e.capa("keystroke", "keylog")),
+        or e.ns("collection/keylog") or e.capa("keystroke", "keylog")
+        or e.found("behavior.keylogger")),
     "anti_analysis": ("Debugger or VM detection", lambda e: "anti_analysis"
         in e.import_categories or e.ns("anti-analysis/")),
     "encoding": ("Encodes or encrypts data", lambda e: "crypto" in e.import_categories
@@ -216,7 +218,10 @@ class ExpectationIndex:
         self.used: set[int] = set()
 
     def find(self, sha256: str, name: str) -> Expectation | None:
-        hit = self.by_sha.get(sha256.lower()) or self.by_name.get(name.lower())
+        # Archive members keep their folder ("Lab_01/Lab_01-1.malware"); match the base name.
+        base = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
+        hit = (self.by_sha.get(sha256.lower()) or self.by_name.get(name.lower())
+               or self.by_name.get(base))
         if hit:
             self.used.add(id(hit))
         return hit
@@ -250,12 +255,13 @@ class Result:
     notes: str = ""
 
 
-def iter_samples(root: Path) -> Iterator[Path]:
+def iter_samples(root: Path, include: list[str] | None = None) -> Iterator[Path]:
     if root.is_file():
         yield root
         return
     for path in sorted(root.rglob("*")):
-        if path.is_file() and not path.is_symlink():
+        if path.is_file() and not path.is_symlink() \
+                and (not include or any(path.match(p) for p in include)):
             yield path
 
 
@@ -318,29 +324,68 @@ def evaluate(file: str, report: dict[str, Any], sample: str, exp: Expectation | 
     )
 
 
+def _triage_one(path: Path, rel: str, triage_args: list[str], keep: Path | None
+                ) -> tuple[str, Path, dict[str, Any] | None, str, float]:
+    start = time.perf_counter()
+    try:
+        report = run_triage(path, triage_args, keep)
+    except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
+        return rel, path, None, f"{rel}: {type(exc).__name__}: {exc}", 0.0
+    return rel, path, report, "", time.perf_counter() - start
+
+
+def _results_for(rel: str, path: Path, report: dict[str, Any], index: ExpectationIndex,
+                 default_label: str, seconds: float) -> list[Result]:
+    out = []
+    for node, name in _nodes(report, path.name):
+        exp = index.find(node["hashes"].get("sha256", ""), name)
+        if exp:
+            out.append(evaluate(rel, node, name, exp, default_label, seconds))
+    return out or [evaluate(rel, report, path.name, None, default_label, seconds)]
+
+
 def validate(samples: Path, index: ExpectationIndex, default_label: str,
-             triage_args: list[str], keep: Path | None,
-             progress: Callable[[str], None] = lambda s: None) -> tuple[list[Result], list[str]]:
+             triage_args: list[str], keep: Path | None, include: list[str] | None = None,
+             progress: Callable[[str], None] = lambda s: None, jobs: int = 1,
+             skip: set[str] | None = None,
+             on_result: Callable[[list[Result]], None] = lambda rs: None,
+             ) -> tuple[list[Result], list[str]]:
+    """Triage every sample. `skip` holds files already done (resume); `on_result` is
+    called as each file finishes so partial results survive an interrupted run."""
+    todo = []
+    for path in iter_samples(samples, include):
+        rel = path.name if samples.is_file() else str(path.relative_to(samples))
+        if not skip or rel not in skip:
+            todo.append((path, rel))
     results: list[Result] = []
     failures: list[str] = []
-    for path in iter_samples(samples):
-        rel = path.name if samples.is_file() else str(path.relative_to(samples))
-        progress(rel)
-        start = time.perf_counter()
-        try:
-            report = run_triage(path, triage_args, keep)
-        except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
-            failures.append(f"{rel}: {type(exc).__name__}: {exc}")
-            continue
-        seconds = time.perf_counter() - start
-        matched = False
-        for node, name in _nodes(report, path.name):
-            exp = index.find(node["hashes"].get("sha256", ""), name)
-            if exp:
-                matched = True
-                results.append(evaluate(rel, node, name, exp, default_label, seconds))
-        if not matched:
-            results.append(evaluate(rel, report, path.name, None, default_label, seconds))
+
+    def collect(rel: str, path: Path, report: dict[str, Any] | None, error: str,
+                seconds: float) -> None:
+        if report is None:
+            failures.append(error)
+            return
+        rs = _results_for(rel, path, report, index, default_label, seconds)
+        results.extend(rs)
+        on_result(rs)
+
+    if jobs <= 1:
+        for path, rel in todo:
+            progress(rel)
+            collect(*_triage_one(path, rel, triage_args, keep))
+        return results, failures
+
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    ctx = multiprocessing.get_context("fork" if sys.platform.startswith("linux") else "spawn")
+    with ProcessPoolExecutor(max_workers=jobs, mp_context=ctx) as pool:
+        futures = [pool.submit(_triage_one, path, rel, triage_args, keep)
+                   for path, rel in todo]
+        for done, fut in enumerate(as_completed(futures), start=1):
+            rel, path, report, error, seconds = fut.result()
+            progress(f"{rel} ({done}/{len(todo)} done)")
+            collect(rel, path, report, error, seconds)
     return results, failures
 
 
@@ -351,17 +396,53 @@ CSV_FIELDS = ["file", "sample", "sha256", "kind", "label", "verdict", "confidenc
               "found", "missed", "surfaced", "incomplete", "seconds", "notes"]
 
 
+def _row(r: Result) -> list[str]:
+    return [r.file, r.sample, r.sha256, r.kind, r.label, r.verdict, r.confidence,
+            r.rule, ";".join(r.rules_matched), "|".join(r.expected_verdicts),
+            "" if r.verdict_ok is None else str(r.verdict_ok).lower(),
+            ";".join(r.expected), ";".join(r.found), ";".join(r.missed),
+            ";".join(r.surfaced), ";".join(r.incomplete), f"{r.seconds:.2f}", r.notes]
+
+
 def write_csv(results: list[Result], path: Path) -> None:
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(CSV_FIELDS)
+        for r in sorted(results, key=lambda r: (r.file, r.sample)):
+            w.writerow(_row(r))
+
+
+def append_csv(results: list[Result], path: Path) -> None:
+    new = not path.exists() or path.stat().st_size == 0
+    with path.open("a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(CSV_FIELDS)
         for r in results:
-            w.writerow([r.file, r.sample, r.sha256, r.kind, r.label, r.verdict, r.confidence,
-                        r.rule, ";".join(r.rules_matched), "|".join(r.expected_verdicts),
-                        "" if r.verdict_ok is None else str(r.verdict_ok).lower(),
-                        ";".join(r.expected), ";".join(r.found), ";".join(r.missed),
-                        ";".join(r.surfaced), ";".join(r.incomplete), f"{r.seconds:.2f}",
-                        r.notes])
+            w.writerow(_row(r))
+
+
+def read_csv(path: Path) -> list[Result]:
+    """Results written by an earlier, possibly interrupted, run."""
+    def split(text: str, sep: str) -> list[str]:
+        return [x for x in text.split(sep) if x]
+
+    out = []
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            ok = row["verdict_ok"]
+            out.append(Result(
+                file=row["file"], sample=row["sample"], sha256=row["sha256"], kind=row["kind"],
+                label=row["label"], verdict=row["verdict"], confidence=row["confidence"],
+                rule=row["rule"], rules_matched=split(row["rules_matched"], ";"),
+                verdict_ok=None if ok == "" else ok == "true",
+                expected_verdicts=tuple(split(row["expected_verdict"], "|")),
+                expected=tuple(split(row["expected_behaviors"], ";")),
+                found=split(row["found"], ";"), missed=split(row["missed"], ";"),
+                surfaced=split(row["surfaced"], ";"), incomplete=split(row["incomplete"], ";"),
+                seconds=float(row["seconds"] or 0), notes=row["notes"],
+            ))
+    return out
 
 
 def _md(text: str) -> str:
@@ -443,6 +524,7 @@ def summary(results: list[Result], failures: list[str], unused: list[Expectation
     if times:
         secs = [t for _, t in times]
         lines += ["", "## Runtime", "",
+                  "Per file triaged (an archive counts once, including its members).", "",
                   f"{len(secs)} file(s). Median {statistics.median(secs):.2f}s, "
                   f"slowest {max(secs):.2f}s, total {sum(secs):.1f}s."]
 
@@ -475,6 +557,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keep-reports", action="store_true",
                    help="also keep each JSON report in OUT/reports (JSON reports contain raw "
                         "indicator values under 'raw' keys)")
+    p.add_argument("--include", action="append", metavar="GLOB",
+                   help="only triage files whose name matches GLOB (for example '*.zip'); "
+                        "repeatable; default: every file")
+    p.add_argument("--jobs", type=int, default=1, metavar="N",
+                   help="triage N files at a time (default: 1); capa is single-threaded, so "
+                        "set this to the number of CPU cores")
+    p.add_argument("--resume", action="store_true",
+                   help="keep the results already in OUT/results.csv and triage only the "
+                        "files not listed there (after an interrupted run)")
     p.add_argument("--list-behaviors", action="store_true",
                    help="print the behavior labels usable in the expectations CSV and exit")
     return p
@@ -509,13 +600,26 @@ def main(argv: list[str] | None = None) -> int:
     if keep:
         keep.mkdir(exist_ok=True)
     index = ExpectationIndex(rows)
+    csv_path = args.out / "results.csv"
+    earlier: list[Result] = []
+    if args.resume and csv_path.exists():
+        earlier = read_csv(csv_path)
+        for r in earlier:  # mark their expectations as used
+            index.find(r.sha256, r.sample)
+        print(f"resuming: {len({r.file for r in earlier})} file(s) already done",
+              file=sys.stderr)
+    else:
+        csv_path.unlink(missing_ok=True)
     results, failures = validate(
-        args.samples, index, args.label, triage_args, keep,
-        progress=lambda name: print(f"triage {name}", file=sys.stderr))
-    write_csv(results, args.out / "results.csv")
+        args.samples, index, args.label, triage_args, keep, include=args.include,
+        progress=lambda name: print(f"triage {name}", file=sys.stderr),
+        jobs=max(1, args.jobs), skip={r.file for r in earlier},
+        on_result=lambda rs: append_csv(rs, csv_path))
+    results = earlier + results
+    write_csv(results, csv_path)
     (args.out / "summary.md").write_text(
         summary(results, failures, index.unused(), triage_args), encoding="utf-8")
-    print(f"wrote {args.out / 'results.csv'} and {args.out / 'summary.md'} "
+    print(f"wrote {csv_path} and {args.out / 'summary.md'} "
           f"({len(results)} result(s), {len(failures)} failure(s))", file=sys.stderr)
     return 0 if not failures else 1
 

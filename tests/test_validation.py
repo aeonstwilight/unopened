@@ -128,3 +128,79 @@ def test_every_behavior_has_a_working_test():
     empty = Evidence()
     for name, (title, test) in BEHAVIORS.items():
         assert title and test(empty) is False, name
+
+
+def test_rpisec_expectations_file_is_valid():
+    rows_ = load_expectations(ROOT / "validation" / "rpisec-labs.csv")
+    assert len(rows_) >= 15
+    assert all(r.name.endswith(".malware") for r in rows_)
+
+
+def test_member_in_subfolder_matches_base_name_and_include_filter(tmp_path, fixtures, arch_fx):
+    d = tmp_path / "Labs" / "Lab_01"
+    d.mkdir(parents=True)
+    (d / "Lab_01.zip").write_bytes(
+        arch_fx.zip_crypto({"Lab_01/Lab_01-1.malware": fixtures.suspicious_exe()}))
+    (d / "solution.md").write_text("# not a sample\n")
+    exp = write(tmp_path / "e.csv", HEADER + ",Lab_01-1.malware,malicious,,injection,\n")
+    out = tmp_path / "out"
+    assert validation.main([str(tmp_path / "Labs"), "--expectations", str(exp), "--out",
+                            str(out), "--include", "*.zip", "--label", "malicious"]) == 0
+    got = rows(out)
+    assert [r["file"] for r in got] == ["Lab_01/Lab_01.zip"]
+    assert got[0]["found"] == "injection"
+    assert "no matching sample" not in (out / "summary.md").read_text()
+
+
+def test_full_import_list_counts_for_behaviors(tmp_path, fixtures):
+    # Found in M5 validation: CopyFileA is in no import category, so a harness that read
+    # only the categorised imports could never surface file_write from imports.
+    spec = fixtures.PESpec(imports={"kernel32.dll": ["CopyFileA", "ExitProcess"]})
+    d = tmp_path / "s"
+    d.mkdir()
+    (d / "copy.exe").write_bytes(fixtures.build_pe(spec))
+    exp = write(tmp_path / "e.csv", HEADER + ",copy.exe,malicious,,file_write,\n")
+    out = tmp_path / "out"
+    assert validation.main([str(d), "--expectations", str(exp), "--out", str(out)]) == 0
+    assert rows(out)[0]["found"] == "file_write"
+
+
+def _verdicts(out):
+    return sorted((r["file"], r["sample"], r["verdict"], r["found"]) for r in rows(out))
+
+
+def test_parallel_jobs_match_sequential(tmp_path, samples):
+    seq, par = tmp_path / "seq", tmp_path / "par"
+    assert validation.main([str(samples), "--out", str(seq)]) == 0
+    assert validation.main([str(samples), "--out", str(par), "--jobs", "2"]) == 0
+    assert _verdicts(seq) == _verdicts(par)
+
+
+def test_resume_skips_files_already_done(tmp_path, samples, capsys):
+    out = tmp_path / "out"
+    assert validation.main([str(samples), "--out", str(out)]) == 0
+    full = _verdicts(out)
+    # Simulate an interrupted run: keep only the first file's rows.
+    lines = (out / "results.csv").read_text().splitlines()
+    first = lines[1].split(",")[0]
+    (out / "results.csv").write_text(
+        "\n".join([lines[0]] + [ln for ln in lines[1:] if ln.startswith(first + ",")]) + "\n")
+    capsys.readouterr()
+    assert validation.main([str(samples), "--out", str(out), "--resume"]) == 0
+    err = capsys.readouterr().err
+    assert "resuming: 1 file(s) already done" in err
+    assert f"triage {first}" not in err
+    assert _verdicts(out) == full
+
+
+def test_results_are_written_as_files_finish(tmp_path, samples, monkeypatch):
+    out = tmp_path / "out"
+    seen = []
+    real = validation.append_csv
+
+    def spy(rs, path):
+        real(rs, path)
+        seen.append(len(path.read_text().splitlines()))
+    monkeypatch.setattr(validation, "append_csv", spy)
+    assert validation.main([str(samples), "--out", str(out)]) == 0
+    assert seen == sorted(seen) and len(seen) == 3  # one append per file, growing

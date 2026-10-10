@@ -120,6 +120,29 @@ reported as not run, never as "no matches".
 Exit codes: `0` report written (whatever it found), `2` usage, configuration or
 output-write error, `3` the input could not be read or was too large.
 
+## Behavior patterns
+
+Most single signals (an embedded program, a download, a resolved API) are common in
+legitimate software, so they are reported at LOW. `src/unopened/data/behaviors.toml`
+names combinations that, together, describe what malware does, and adds one finding
+when all parts are present, citing the exact evidence.
+
+| Pattern | Fires when | Severity |
+|---|---|---|
+| Reverse shell | capa: create reverse shell | HIGH |
+| Keystroke logging | capa: log keystrokes | HIGH |
+| Collects files and uploads them | unsigned + enumerates files + sends files over HTTP | HIGH |
+| Shellcode-style API loading | no import table + walks loader structures or parses exports | HIGH |
+| Hidden strings and runtime-resolved APIs | unsigned + stack strings + many runtime-linked functions | HIGH |
+| Drops an embedded program | unsigned + embedded PE + extracts a resource + writes a file | MEDIUM |
+| Downloads and runs a file | unsigned + downloads + writes and runs or starts a process | MEDIUM |
+| Starts itself through a Run key | capa: persist via Run registry key | MEDIUM |
+| Deletes itself | capa: self delete | MEDIUM |
+
+"Unsigned" means a positive not-signed result. If the signature could not be checked,
+those patterns do not fire and the report says so. Patterns likely to match legitimate
+unsigned installers start at MEDIUM and are promoted only after the benign-corpus run.
+
 ## Hash reputation (opt-in)
 
 ```sh
@@ -152,6 +175,11 @@ python scripts/validate.py ~/samples/pma --expectations validation/pma-labs.csv 
 python scripts/validate.py ~/corpus --label benign      # false-positive run
 python scripts/validate.py --list-behaviors             # labels for the CSV
 ```
+
+capa is slow on large programs (minutes each in a VM) and single-threaded, so set
+`--jobs` to the VM's CPU count (`nproc`). Results are written to `results.csv` as each
+file finishes; after an interruption, rerun with `--resume` to skip the files already
+done.
 
 The outputs hold labels and rule IDs, never raw indicators; `--keep-reports` also keeps
 the full JSON reports, which do contain raw values under `raw` keys.
@@ -197,7 +225,7 @@ their members.
 
 | Step | What it does |
 |---|---|
-| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), ZIP, LNK, PDF, 7z, ISO, PowerShell/JavaScript/VBScript/batch (heuristic), text. Flags extension mismatches, double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
+| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), ZIP, LNK, PDF, 7z, ISO, PowerShell/JavaScript/VBScript/batch (heuristic), text. Flags extension mismatches (HIGH when a program wears a document, image or archive extension; LOW for storage names like `.bin` or `.malware`), double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
 | Hashes | MD5, SHA1, SHA256; imphash for PE; TLSH when `py-tlsh` is installed. |
 | PE | Headers, compile timestamp (zeroed, future, implausible, Delphi default), sections with entropy and permissions, packer section names, W+X sections, entry point placement, imports grouped by behavior (`data/pe_imports.toml`), exports, PDB path, overlay, truncation, .NET detection, parser anomalies. |
 | Authenticode | Signature presence and validity (offline, against the Microsoft root list bundled with signify), signer, issuer and timestamp. Revocation is not checked. |

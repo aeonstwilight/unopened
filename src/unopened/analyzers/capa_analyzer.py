@@ -19,7 +19,11 @@ from . import AnalyzerUnavailable, Context
 ATTACK_ID = re.compile(r"\[(T\d{4}(?:\.\d{3})?)\]")
 MBC_ID = re.compile(r"\[([A-Z]\d{4}(?:\.[A-Z0-9]{3,4})?)\]")
 
-# ATT&CK tactics whose capabilities are reported at MEDIUM; the rest at LOW.
+# ATT&CK tactics listed first in the report. Every tactic summary is LOW: during M5
+# validation, Defense Evasion, Persistence and Privilege Escalation summaries appeared on
+# nearly every signed admin tool, and at MEDIUM three of them alone made a benign file
+# "suspicious". Specific capabilities carry weight through behavior patterns instead
+# (data/behaviors.toml).
 NOTABLE_TACTICS = {
     "Defense Evasion", "Persistence", "Privilege Escalation", "Credential Access",
     "Collection", "Impact", "Command and Control", "Exfiltration", "Lateral Movement",
@@ -125,7 +129,7 @@ def _findings(found: list[dict[str, Any]], limitations: list[dict[str, str]],
                              if a["tactic"] == tactic and a["id"]})
         out.findings.append(Finding(
             f"capa.tactic.{tactic.lower().replace(' ', '_')}",
-            Severity.MEDIUM if tactic in NOTABLE_TACTICS else Severity.LOW,
+            Severity.LOW,
             f"capa: {tactic} ({len(names)} capabilit{'y' if len(names) == 1 else 'ies'})",
             f"{'; '.join(names)}. ATT&CK: {', '.join(techniques) or 'none'}. These are "
             "inferred from code patterns, not observed behavior.",

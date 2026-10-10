@@ -38,10 +38,28 @@ GENERIC_FAILURE = (
     Severity.MEDIUM, "Signature failed verification",
     "The file carries a signature that does not verify.",
 )
+# Post-quantum signature algorithms (FIPS 204 ML-DSA, FIPS 205 SLH-DSA) that signify does
+# not know yet. In M5 validation every Microsoft-signed file in the benign corpus carried an
+# ML-DSA-87 signature (OID ...3.4.3.19) and the verifier stopped on it. That says nothing
+# about the file, so it is reported loudly as an incomplete check, never as evidence. Any
+# other verifier error (for example malformed signature data) stays a MEDIUM finding.
+UNSUPPORTED_ALGORITHMS = {
+    f"2.16.840.1.101.3.4.3.{n}": name
+    for n, name in [(17, "ML-DSA-44"), (18, "ML-DSA-65"), (19, "ML-DSA-87")]
+    + [(n, "SLH-DSA") for n in range(20, 32)]
+}
+
+
+def unsupported_algorithm(error: BaseException | None) -> str | None:
+    text = f"{error!r} {error}" if error else ""
+    return next((name for oid, name in UNSUPPORTED_ALGORITHMS.items() if oid in text), None)
 
 
 def analyze_authenticode(ctx: Context) -> AnalyzerOutput:
     try:
+        from .. import asn1_compat
+
+        asn1_compat.apply()  # ML-DSA / SLH-DSA keys must not stop RSA verification
         from signify.authenticode import AuthenticodeFile, AuthenticodeVerificationResult
     except Exception as exc:  # e.g. oscrypto cannot find or recognize libcrypto
         raise AnalyzerUnavailable(
@@ -89,6 +107,16 @@ def analyze_authenticode(ctx: Context) -> AnalyzerOutput:
         out.findings.append(Finding(
             "sig.valid",
             Severity.INFO, f"Valid Authenticode signature{who}", SIGNED_MALWARE_NOTE
+        ))
+    elif result.name == "UNKNOWN_ERROR" and (algo := unsupported_algorithm(error)):
+        out.data["unsupported_algorithm"] = algo
+        out.errors.append(f"signature uses {algo}, which the verifier does not support yet; "
+                          "validity was not checked")
+        out.findings.append(Finding(
+            "sig.not_verified", Severity.INFO, "Signature present, could not be verified" + who,
+            f"The file carries a {algo} (post-quantum) signature that the verifier does not "
+            "support yet, so the signatures were neither confirmed nor refuted. This says "
+            "nothing about the file either way.",
         ))
     else:
         severity, title, detail = FAILURES.get(result.name, GENERIC_FAILURE)
