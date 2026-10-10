@@ -25,7 +25,7 @@ numbers can be reproduced and challenged.
 |---|---|---|
 | RPISEC Malware course labs | 17 PE samples in 9 zipped labs | Each lab's `solution.md` ([RPISEC/Malware](https://github.com/RPISEC/Malware), credited in `validation/rpisec-labs.csv`) |
 | Benign corpus | 201 files | Ordinary Windows software: Sysinternals Suite, the Python 3.12 embeddable build, the 7-Zip 24.08 installer, PuTTY |
-| Current samples (holdout) | _not yet run_ | MalwareBazaar tags; samples the rules were not written against |
+| Current samples (holdout) | 30 MalwareBazaar samples, 13 file types | MalwareBazaar tags; samples the rules were not written against |
 
 ## Results: RPISEC labs
 
@@ -77,6 +77,36 @@ The behavior patterns were written while looking at these 17 samples, so run 3 i
 optimistic by construction. The benign corpus measures false positives, and the holdout
 set measures detection on samples the rules have never seen. Both belong next to these
 numbers.
+
+## Results: holdout (MalwareBazaar)
+
+The most honest number in this document. Thirty current samples, the newest on
+MalwareBazaar for each file type at the time of download (October 2026), picked by type and
+date rather than by how the tool did on them. The rules were frozen at commit `0c57e61`
+before the run, and nothing was tuned until this first result was recorded. Hashes and tags
+are in `validation/holdout-malwarebazaar.csv`. One sample, a 7z, is locked with a password
+named in its tags (5733); an analyst would have it from the delivery email, so it was
+passed with `--archive-password`.
+
+**Run 1: expected verdict met on 11 of 30.** 4 malicious, 7 suspicious, 1 could not
+analyze, 18 no findings.
+
+| Type | Met | Type | Met |
+|---|---|---|---|
+| LNK | 4 of 4 | Scripts (ps1, js, bat, vbs) | 1 of 6 |
+| Office .doc | 2 of 2 | PDF | 0 of 3 |
+| DLL | 2 of 3 | ZIP | 0 of 2 |
+| EXE | 1 of 5 | ISO | 1 of 2 |
+| Office .xls | 0 of 2 | 7z | 0 of 1 (could not analyze) |
+
+The gap between this and the RPISEC result (12 of 16) is the gap between rules written
+while looking at the samples and rules meeting samples they have never seen. Each miss is
+being worked through with the saved reports; the explanations and any fixes, each with a
+synthetic regression test, will be listed here, and any rerun will be reported as a rerun
+next to this one.
+
+Runtime: median 7.2 s per file, slowest 908 s (an ISO stopped by the 900-second file
+budget, its first real use), 50 minutes in total. capa timed out on 4 files.
 
 ## Results: benign corpus
 
