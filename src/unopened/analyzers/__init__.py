@@ -31,6 +31,9 @@ class Options:
     max_indicators: int = 5_000
     timeout: float = 60.0
     timeouts: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_TIMEOUTS))
+    # Whole-file budget, archive members included. Analyzer limits alone add up: in M5 one
+    # benign file took 1,356 s although no single analyzer may run past 300 s.
+    file_timeout: float = 900.0
     allowlist: Allowlist = field(default_factory=Allowlist)
     yara_rules: Path | None = None
     capa_rules: Path | None = None

@@ -105,6 +105,7 @@ reported as not run, never as "no matches".
 | `--capa-timeout SECONDS` | `300` | Time limit for capa, which is slow on large binaries |
 | `--max-size SIZE` | `200MB` | Refuse larger files (`5000000`, `50MB`, `1G`); also the per-member extraction limit |
 | `--timeout SECONDS` | `60` | Per-analyzer time limit; a stopped analyzer is reported as TIMED OUT |
+| `--file-timeout SECONDS` | `900` | Time budget for the whole file, archive members included; checks and members still pending when it runs out are listed under Not checked and the verdict's confidence drops to low |
 | `--reputation` | off | Look up SHA256 hashes at MalwareBazaar, then VirusTotal (see below) |
 | `--max-lookups N` | `20` | Hashes looked up per run (file plus extracted members) |
 | `--hunt-days N` | `30` | Time window for the SIEM hunt queries |

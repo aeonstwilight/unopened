@@ -135,5 +135,12 @@ Read this number with three limits in mind:
 - Benign corpus, run 2 (2 parallel jobs in a 2-CPU VM): median 72.9 s per file, 6.5 hours
   of analysis in total. capa accounts for nearly all of it and hit its 5-minute limit on 15
   files.
-- **Known issue:** the slowest benign file took 1,356 s, well past the per-analyzer limits
-  (capa 300 s, others 60 s). One check is not stopping on time; to be investigated.
+- **Overrun, fixed:** the slowest benign file took 1,356 s, past every per-analyzer limit
+  (capa 300 s, others 60 s). The limits were working; nothing capped the file as a whole.
+  Analyzers run one after another, so a single PE could take up to 660 s, and every
+  archive member got a fresh set of limits, so an archive had no ceiling at all. 1,356 s
+  is more than one PE can take, which points to an archive in the corpus. There is now a
+  time budget for the whole file (`--file-timeout`, default 900 s): each analyzer gets the
+  smaller of its own limit and the time left, and analyzers or members still pending when
+  it runs out are listed under Not checked, with the verdict's confidence lowered to low.
+  Regression tests: `tests/test_time_budget.py`.

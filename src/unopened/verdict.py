@@ -298,6 +298,10 @@ def evaluate(report: Report) -> dict[str, Any]:
         if report.file_type and report.file_type.kind == "empty":
             confidence = "low"
             caveats.append("lowered: the file is empty")
+        skipped = sum(len(r.data.get("members_not_analyzed", [])) for r in report.results)
+        if skipped:
+            confidence = "low"
+            caveats.append(f"lowered: {skipped} member(s) not analyzed (time budget used up)")
     elif incomplete and verdict in (MALICIOUS, SUSPICIOUS):
         caveats.append("note: some checks did not complete ("
                        + ", ".join(f"{r.name} {r.status}" for r in incomplete)

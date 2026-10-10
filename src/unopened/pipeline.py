@@ -10,6 +10,7 @@ from __future__ import annotations
 import itertools
 import shutil
 import tempfile
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -72,6 +73,10 @@ class _Session:
         self.budget = Budget.from_limits(options.limits)
         self.workdir = Path(tempfile.mkdtemp(prefix="unopened-"))  # mode 0700
         self.counter = itertools.count(1)
+        self.deadline = time.monotonic() + options.file_timeout
+
+    def time_left(self) -> float:
+        return self.deadline - time.monotonic()
 
     def new_extract_dir(self) -> Path:
         d = self.workdir / f"x{next(self.counter):04d}"
@@ -145,7 +150,10 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
                   extract_dir=extract_dir, files_left=session.budget.files_left,
                   bytes_left=session.budget.bytes_left)
     analyzers = registry()
-    results = extra_results + [run_analyzer(a, ctx, isolate=session.isolate) for a in analyzers]
+    results = extra_results + [
+        run_analyzer(a, ctx, isolate=session.isolate, time_left=session.time_left())
+        for a in analyzers
+    ]
     titles = {a.name: a.title for a in analyzers} | {"identify": "File type identification"}
     by_name = {r.name: r for r in results}
 
@@ -160,10 +168,17 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
         r = by_name.get(source)
         if r is None or r.status not in (Status.OK, Status.PARTIAL) or extract_dir is None:
             continue
-        for member in r.data.get("members", []):
-            if not member.get("stored"):
-                continue
+        stored_members = [m for m in r.data.get("members", []) if m.get("stored")]
+        for i, member in enumerate(stored_members):
             stored = extract_dir / member["stored"]
+            if session.time_left() <= 0:
+                rest = stored_members[i:]
+                r.data["members_not_analyzed"] = [m["name"] for m in rest]
+                r.not_checked.append(
+                    f"{len(rest)} of {len(stored_members)} extracted member(s) were not "
+                    f"analyzed: the {options.file_timeout:g}-second time budget for this file "
+                    f"was used up (first: {', '.join(m['name'] for m in rest[:3])})")
+                break
             child = _triage(session, stored, name=basename(member["name"]), depth=depth + 1)
             child.file_name = member["name"]
             children.append({"source": source, "member": member, "report": child})
