@@ -82,7 +82,7 @@ fewer than 5% of files.
 | Run | Malicious | Suspicious | False-positive rate |
 |---|---|---|---|
 | 1. After the RPISEC fixes and behavior patterns | 4 | 62 | **32.8%** (66 of 201) |
-| 2. After the fixes below | _pending_ | _pending_ | _pending_ |
+| 2. After the fixes below | 0 | 1 | **0.5%** (1 of 201) |
 
 **Run 1 failed the target badly.** Diagnostics on 13 representative files found four
 causes:
@@ -107,8 +107,20 @@ causes:
    detects .NET single-file bundles on RDCMan. A lone HIGH YARA match on a file with a
    valid signature is now MEDIUM, with a note that certificates can be stolen.
 
-The dropper pattern stays at MEDIUM until run 2 shows how it behaves on the 7-Zip
-installer.
+**Run 2 met the target**: no malicious verdicts and one suspicious file. The remaining
+false positive is ZoomIt64, where three MEDIUM heuristics stack up (V-SUS-04). It is left
+as found rather than tuned away.
+
+Read this number with three limits in mind:
+
+- **The fixes were made against this corpus**, so run 2 is optimistic in the same way the
+  RPISEC numbers are. A second, different benign set is needed before it is a general
+  claim.
+- **capa hit its 5-minute limit on 15 files**, so behavior patterns that rely on capa
+  could not fire there. The true rate on those files is unmeasured, not zero.
+- **The corpus is mostly signed Windows tools.** It has one unsigned installer (7-Zip),
+  no documents, scripts or shortcuts. The dropper pattern stays at MEDIUM: one unsigned
+  installer is not enough evidence to promote it.
 
 ## Runtime
 
