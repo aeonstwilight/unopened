@@ -54,3 +54,31 @@ def test_msi_contents_are_reported_as_not_checked(make_file, office_fx):
     assert r.verdict["value"] == "no findings"
     assert r.verdict["confidence"] == "low"
     assert any("Windows Installer" in c for c in r.verdict["caveats"])
+
+
+def _pump_options():
+    from unopened.extraction import Limits
+    return Options(hunt=False, limits=Limits(max_member_size=50_000))
+
+
+def test_pumped_program_in_7z_is_called_out(make_file, arch_fx):
+    # Run 1: a 15 MB 7z declared a 961 MB program. Limits scaled down here: a 400 KB
+    # program of zeros over a 50 KB member limit.
+    pytest.importorskip("py7zr")
+    data = arch_fx.seven_zip({"Setup.exe": b"MZ" + bytes(400_000)})
+    r = pipeline.triage(make_file("pumped.7z", data), _pump_options())
+    found = ids(r)
+    assert found["archive.pumped_member"].value == "high"
+    assert r.verdict["value"] in ("suspicious", "malicious")
+
+
+@pytest.mark.parametrize("name, data", [
+    ("big.exe", None),         # over the limit but incompressible: a large real program
+    ("disk.dat", bytes(400_000)),  # inflated, but not a program
+])
+def test_large_members_that_are_not_pumped_programs(make_file, arch_fx, fixtures, name, data):
+    pytest.importorskip("py7zr")
+    import random
+    payload = data if data is not None else random.Random(1).randbytes(400_000)
+    r = pipeline.triage(make_file("a.7z", arch_fx.seven_zip({name: payload})), _pump_options())
+    assert "archive.pumped_member" not in ids(r)

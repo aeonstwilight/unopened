@@ -119,7 +119,7 @@ capabilities and indicator counts but no indicator values.
 | 2 Excel .xls | VBA macros using suspicious functions, no auto-run trigger | **Open**: legitimate macro workbooks use the same functions; needs the second benign corpus, which has macro documents, before any rule |
 | 3 PDFs | Links only, no JavaScript, actions or attachments | **Limitation**: a link-only lure looks like an ordinary document to static analysis. The links are in the indicators for pivoting |
 | 1 JavaScript | Only a LOW `eval` finding on a large file | **Limitation** for now: the deobfuscator handles base64, char codes and concatenation, not this |
-| 1 7z | Nothing could be extracted | Correctly reported as could not analyze; cause to confirm with `miss_details.py`, which now prints skip reasons |
+| 1 7z | A 15 MB archive declaring a single 961 MB program (file pumping, padding to get past scanner size limits); refused by the per-member limit and reported only as could not analyze | **Fixed**: a program declared past the limit at 20 times or more its compressed size is a HIGH finding, since the padding is itself the evidence |
 
 Each fix has a synthetic regression test (`tests/test_holdout_fixes.py`,
 `tests/test_behaviors.py`, `tests/test_pe.py`). Run 2 will be reported next to run 1, not

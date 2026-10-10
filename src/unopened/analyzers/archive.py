@@ -13,6 +13,7 @@ import zlib
 from typing import Any
 
 from ..extraction import CHUNK, LimitHit, MemberWriter
+from ..identify import RUNNABLE
 from ..model import AnalyzerOutput, Finding, Severity
 from . import AnalyzerUnavailable, Context
 
@@ -374,6 +375,16 @@ def _findings(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
             f"{len(bomb)} member(s) expand far more than normal data does; they were not "
             "extracted.",
         ))
+    pumped = _pumped(members, ctx)
+    if pumped:
+        out.findings.append(Finding(
+            "archive.pumped_member", Severity.HIGH,
+            f"Program inflated past analysis size limits ({len(pumped)})",
+            f"{', '.join(pumped[:3])}. A program that declares far more bytes than its "
+            "compressed data would normally hold has been padded (file pumping), a technique "
+            "for slipping past antivirus and sandbox size limits. It was not extracted; the "
+            "padding itself is the evidence.",
+        ))
     skipped = [m for m in members if m.get("skipped")]
     if skipped:
         reasons = sorted({m["skipped"] for m in skipped})
@@ -400,3 +411,24 @@ def _findings(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
             "the downloaded-from-internet flag, so Windows skips some security prompts. This "
             "is why attackers deliver payloads this way.",
         ))
+
+
+PUMP_RATIO = 20  # legitimate large programs compress 2-3x; the M5 holdout sample was ~64x
+
+
+def _pumped(members: list[dict[str, Any]], ctx: Context) -> list[str]:
+    """Runnable members skipped for declaring more than the per-member limit, with a
+    declared size far beyond their compressed data. M5 holdout: a 15 MB 7z declared a
+    961 MB program and was reported only as "could not analyze"."""
+    limit = ctx.options.limits.max_member_size
+    out = []
+    for m in members:
+        size = m.get("size") or 0
+        ext = m["name"].rsplit(".", 1)[-1].lower() if "." in m["name"] else ""
+        over = "per-member limit" in (m.get("skipped") or "")
+        if size <= limit or ext not in RUNNABLE or not over:
+            continue
+        compressed = m.get("compressed_size") or ctx.size  # solid 7z: no per-member size
+        if compressed and size / compressed >= PUMP_RATIO:
+            out.append(f"{m['name']} declares {size:,} bytes from {compressed:,} compressed")
+    return out
