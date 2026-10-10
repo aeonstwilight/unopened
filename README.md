@@ -130,18 +130,28 @@ when all parts are present, citing the exact evidence.
 
 | Pattern | Fires when | Severity |
 |---|---|---|
-| Reverse shell | capa: create reverse shell | HIGH |
-| Keystroke logging | capa: log keystrokes | HIGH |
+| Reverse shell | unsigned + capa: create reverse shell | HIGH |
+| Keystroke logging | unsigned + capa: log keystrokes | HIGH |
 | Collects files and uploads them | unsigned + enumerates files + sends files over HTTP | HIGH |
-| Shellcode-style API loading | no import table + walks loader structures or parses exports | HIGH |
-| Hidden strings and runtime-resolved APIs | unsigned + stack strings + many runtime-linked functions | HIGH |
+| Shellcode-style API loading | no or almost no imports + walks loader structures or parses exports | HIGH |
+| Hidden strings and runtime-resolved APIs | unsigned + stack strings + many runtime-linked functions or parses exports | HIGH |
 | Drops an embedded program | unsigned + embedded PE + extracts a resource + writes a file | MEDIUM |
 | Downloads and runs a file | unsigned + downloads + writes and runs or starts a process | MEDIUM |
 | Starts itself through a Run key | capa: persist via Run registry key | MEDIUM |
 | Deletes itself | capa: self delete | MEDIUM |
+| Obfuscated script that sets up persistence | script is obfuscated + scheduled task or Run key | HIGH |
+| Process-injection imports under an untrusted signature | signature fails verification + process-injection imports | HIGH |
+| Embedded program, with a YARA match | unsigned + embedded PE + any YARA match | HIGH |
+| Disk image hiding files next to programs | hidden files + programs, shortcuts or scripts in the image | HIGH |
+| Bypasses User Account Control | unsigned + capa: bypass UAC | HIGH |
 
-"Unsigned" means a positive not-signed result. If the signature could not be checked,
-those patterns do not fire and the report says so. Patterns likely to match legitimate
+The last five were added after the holdout run in [docs/validation.md](docs/validation.md),
+from combinations seen on real samples the earlier rules had not been written against.
+
+"Unsigned" means a positive not-signed result, or a signature that fails verification
+(untrusted certificate, altered file), since that lends no trust. On a file with a valid
+signature these patterns are kept at LOW. If the signature could not be checked at all,
+they do not fire and the report says so. Patterns likely to match legitimate
 unsigned installers start at MEDIUM and are promoted only after the benign-corpus run.
 
 ## Hash reputation (opt-in)

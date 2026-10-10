@@ -60,6 +60,11 @@ PLANNED_BY_KIND: dict[str, list[tuple[str, str]]] = {
                  "and YARA were checked")],
 }
 EXTRACTING_KINDS = {"zip", "7z", "iso", "pdf"}
+# M5 holdout: two MSI installers came back "no findings" without the report saying their
+# contents were never examined.
+MSI_NOT_CHECKED = "Windows Installer (MSI) contents"
+MSI_REASON = ("custom actions, embedded scripts and packaged files are not analyzed in "
+              "version 1; only hashes, strings and YARA were checked")
 MEMBER_SOURCES = ("archive", "pdf")
 RUNNABLE_MEMBER_KINDS = {"pe", "mz", "lnk", "script"}
 
@@ -314,6 +319,8 @@ def build_not_checked(
             items.append(NotChecked(title, note))
     for check, reason in PLANNED_BY_KIND.get(file_type.kind, []) + ALWAYS_PLANNED:
         items.append(NotChecked(check, reason))
+    if file_type.kind == "ole" and file_type.subtype == "msi":
+        items.append(NotChecked(MSI_NOT_CHECKED, MSI_REASON))
     return items
 
 

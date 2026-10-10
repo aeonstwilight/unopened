@@ -89,9 +89,13 @@ def evaluate(results: list[AnalyzerResult],
     capa = {c["name"] for c in (capa_result.data.get("capabilities", [])
                                 if capa_result and capa_result.status == Status.OK else [])}
     sig = by_name.get("authenticode")
-    signed_flag = (sig.data or {}).get("signed") if sig is not None else None
-    unsigned = "sig.unsigned" in finding_ids
-    signed = signed_flag is True
+    sig_data = (sig.data or {}) if sig is not None else {}
+    # A signature that fails verification (untrusted certificate, altered file, malformed
+    # data) lends no trust, so unsigned-only patterns apply in full. M5 holdout: three
+    # Vidar samples and a side-loaded DLL carried such signatures.
+    failed = sig_data.get("signed") is True and sig_data.get("valid") is False
+    unsigned = "sig.unsigned" in finding_ids or failed
+    signed = sig_data.get("signed") is True
 
     out = AnalyzerResult(SOURCE, Status.OK, data={"matched": [], "blocked_by_signature": []})
     for p in pattern_list:
@@ -102,7 +106,9 @@ def evaluate(results: list[AnalyzerResult],
                 break
             evidence.append(hit)
         else:
-            severity, note = p.severity, "; not digitally signed" if p.unsigned else ""
+            severity = p.severity
+            note = ("" if not p.unsigned else
+                    "; its signature does not verify" if failed else "; not digitally signed")
             if p.unsigned and not unsigned:
                 if not signed:
                     out.data["blocked_by_signature"].append(p.id)

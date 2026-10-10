@@ -82,8 +82,30 @@ def identify(path: Path, name: str | None = None) -> FileType:
     with path.open("rb") as f:
         head = f.read(HEAD_SIZE)
     file_type = _identify_content(path, head)
+    if file_type.kind == "text":
+        file_type = _script_by_name(name or path.name) or file_type
     file_type.mismatches = check_name(name or path.name, file_type)
     return file_type
+
+
+def _script_by_name(name: str) -> FileType | None:
+    """Text whose content heuristics found no language but whose name says script.
+
+    M5 holdout: three real scripts were padded with junk so the heuristics, which read only
+    the start of the file, scored nothing, and the script analyzer never ran. Text content
+    cannot contradict a script extension, so the name decides."""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    for key, exts in EXPECTED_EXTENSIONS.items():
+        if key.startswith("script:") and ext in exts:
+            lang = key.split(":", 1)[1]
+            return FileType(
+                "script",
+                f"{SCRIPT_NAMES[lang]} script (identified by its .{ext} name; the content "
+                "heuristics were inconclusive)",
+                subtype=lang,
+                details={"identified_by": "extension"},
+            )
+    return None
 
 
 def _identify_content(path: Path, head: bytes) -> FileType:

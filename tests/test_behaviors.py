@@ -21,6 +21,12 @@ def results(capa=(), findings=(), signed: bool | None = False, capa_ok=True):
         data={"capabilities": [{"name": c} for c in capa]} if capa_ok else {}))
     if signed is None:
         out.append(AnalyzerResult("authenticode", Status.UNAVAILABLE))
+    elif signed == "failed":
+        # Signature present but does not verify (M5 holdout: untrusted certificates).
+        out.append(AnalyzerResult("authenticode", Status.OK,
+                                  data={"signed": True, "valid": False},
+                                  findings=[Finding("sig.certificate_error", Severity.MEDIUM,
+                                                    "x")]))
     elif signed == "unverifiable":
         # Signature present, verifier failed (M5: ML-DSA signatures on Microsoft binaries).
         out.append(AnalyzerResult("authenticode", Status.PARTIAL, data={"signed": True},
@@ -49,6 +55,14 @@ CASES = {
                          Severity.MEDIUM),
     "run_key_persistence": (["persist via Run registry key"], [], Severity.MEDIUM),
     "self_delete": (["self delete"], [], Severity.MEDIUM),
+    "obfuscated_persistent_script": ([], ["script.obfuscated", "script.ps.persistence"],
+                                     Severity.HIGH),
+    "untrusted_signer_injection": ([], ["sig.certificate_error",
+                                        "pe.imports.process_injection"], Severity.HIGH),
+    "flagged_dropper": (["contain an embedded PE file"], ["yara.match"], Severity.HIGH),
+    "hidden_programs_in_image": ([], ["archive.hidden_files", "container.runnable_member"],
+                                 Severity.HIGH),
+    "uac_bypass": (["bypass UAC via ICMLuaUtil"], [], Severity.HIGH),
 }
 
 
@@ -84,6 +98,37 @@ def test_signed_file_keeps_unsigned_only_evidence_at_low(signed):
         assert matched(results(CASES[pid][0], signed=signed))[pid] == Severity.LOW
     # Patterns without the guard keep their severity on signed files.
     assert matched(results(["self delete"], signed=True))["self_delete"] == Severity.MEDIUM
+
+
+def test_failed_signature_lends_no_trust():
+    # M5 holdout: Vidar samples signed with untrusted certificates; a side-loaded DLL
+    # signed by an untrusted publisher used a UAC bypass.
+    for pid in ("dropper", "keylogger", "reverse_shell", "uac_bypass"):
+        out = matched(results(CASES[pid][0], signed="failed"))
+        assert out[pid] == CASES[pid][2]
+    (f,) = [f for f in behaviors.evaluate(results(["create reverse shell"], signed="failed"))
+            .findings]
+    assert "its signature does not verify" in f.detail
+
+
+# Evidence seen on M5 holdout samples, as synthetic analyzer results ------------------
+
+def test_holdout_tiny_loader():
+    # 4.6 KB PE with one import, PEB walking and stack strings; run 1 said no findings.
+    capa = ["access PEB ldr_data", "contain obfuscated stackstrings", "encode data using XOR",
+            "encrypt data using RC4 PRGA", "resolve function by parsing PE exports"]
+    out = matched(results(capa, ["pe.small_import_table"]))
+    assert out["shellcode_loader"] == Severity.HIGH
+    assert out["hidden_strings_and_apis"] == Severity.HIGH
+
+
+def test_holdout_untrusted_signer_with_injection_imports():
+    out = matched(results([], ["pe.imports.process_injection", "pe.timestamp_zeroed"],
+                          signed="failed"))
+    assert out["untrusted_signer_injection"] == Severity.HIGH
+    # A valid signature does not satisfy the pattern.
+    assert "untrusted_signer_injection" not in matched(
+        results([], ["pe.imports.process_injection"], signed=True))
 
 
 def test_unknown_signature_blocks_and_says_so():

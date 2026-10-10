@@ -100,10 +100,31 @@ analyze, 18 no findings.
 | Office .xls | 0 of 2 | 7z | 0 of 1 (could not analyze) |
 
 The gap between this and the RPISEC result (12 of 16) is the gap between rules written
-while looking at the samples and rules meeting samples they have never seen. Each miss is
-being worked through with the saved reports; the explanations and any fixes, each with a
-synthetic regression test, will be listed here, and any rerun will be reported as a rerun
-next to this one.
+while looking at the samples and rules meeting samples they have never seen.
+
+### The 19 misses
+
+Read from the saved reports with `scripts/miss_details.py`, which prints findings,
+capabilities and indicator counts but no indicator values.
+
+| Misses | What the report showed | Outcome |
+|---|---|---|
+| 3 scripts | Junk padding at the start hid the language, so they were identified as plain text and the script analyzer never ran | **Fixed**: text with a script extension is treated as that script (`tests/test_identify.py`) |
+| 1 PowerShell script | Obfuscated, and sets up a scheduled task or Run key: two MEDIUM findings, one short of suspicious | **Fixed**: new pattern, obfuscated script that sets up persistence |
+| 3 EXEs (Vidar) | Process-injection imports and a signature from an untrusted certificate; capa timed out | **Fixed**: new pattern, and a signature that fails verification no longer mutes unsigned-only patterns |
+| 1 DLL (WannaCry) | Embedded program, the dropper pattern and a YARA match, each MEDIUM | **Fixed**: new pattern, embedded program with a YARA match |
+| 1 ISO | 12 programs and 16 hidden files: Microsoft-signed DLLs beside a DLL from an untrusted signer that bypasses UAC | **Fixed**: new patterns for the image layout and the UAC bypass; reproducible-build timestamps on the signed DLLs no longer count as forged |
+| 1 tiny EXE | One import, walks the PEB, stack strings, resolves functions from exports | **Fixed**: the shellcode and hidden-API patterns now accept an almost empty import table and export parsing |
+| 2 MSI installers | No findings, and the report did not say MSI contents go unexamined | **Fixed (reporting)**: listed under Not checked, confidence low. MSI analysis itself is out of scope for version 1 |
+| 2 Excel .xls | VBA macros using suspicious functions, no auto-run trigger | **Open**: legitimate macro workbooks use the same functions; needs the second benign corpus, which has macro documents, before any rule |
+| 3 PDFs | Links only, no JavaScript, actions or attachments | **Limitation**: a link-only lure looks like an ordinary document to static analysis. The links are in the indicators for pivoting |
+| 1 JavaScript | Only a LOW `eval` finding on a large file | **Limitation** for now: the deobfuscator handles base64, char codes and concatenation, not this |
+| 1 7z | Nothing could be extracted | Correctly reported as could not analyze; cause to confirm with `miss_details.py`, which now prints skip reasons |
+
+Each fix has a synthetic regression test (`tests/test_holdout_fixes.py`,
+`tests/test_behaviors.py`, `tests/test_pe.py`). Run 2 will be reported next to run 1, not
+in its place, and it is no longer a holdout: these samples shaped the fixes. A fresh
+holdout set is the honest check of them.
 
 Runtime: median 7.2 s per file, slowest 908 s (an ISO stopped by the 900-second file
 budget, its first real use), 50 minutes in total. capa timed out on 4 files.

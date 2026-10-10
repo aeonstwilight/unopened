@@ -154,3 +154,21 @@ def test_pe_with_storage_extension_is_low_not_high(make_file, fixtures, name):
 def test_pe_with_decoy_extension_stays_high(make_file, fixtures, name):
     ft = identify(make_file(name, fixtures.benign_exe()))
     assert [m.severity for m in ft.mismatches] == [Severity.HIGH]
+
+
+@pytest.mark.parametrize(("name", "lang"), [
+    ("a.js", "javascript"), ("a.ps1", "powershell"), ("a.bat", "batch"), ("a.vbs", "vbscript"),
+])
+def test_padded_script_is_identified_by_name(make_file, name, lang):
+    # M5 holdout: scripts led by junk padding scored nothing on the content heuristics, were
+    # called plain text, and the script analyzer never ran.
+    padding = "".join(f"qzx{i} wvk{i * 7} " for i in range(4000)) + "\n"
+    ft = identify(make_file(name, padding.encode()))
+    assert (ft.kind, ft.subtype) == ("script", lang)
+    assert ft.details["identified_by"] == "extension"
+    assert ft.mismatches == []
+
+
+def test_text_with_other_names_stays_text(make_file):
+    for name in ("notes.txt", "README", "a.exe"):
+        assert identify(make_file(name, b"plain words only\n")).kind == "text"

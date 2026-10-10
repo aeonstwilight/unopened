@@ -298,6 +298,10 @@ def evaluate(report: Report) -> dict[str, Any]:
         if report.file_type and report.file_type.kind == "empty":
             confidence = "low"
             caveats.append("lowered: the file is empty")
+        ft = report.file_type
+        if ft and ft.kind == "ole" and ft.subtype == "msi":
+            confidence = "low"
+            caveats.append("lowered: Windows Installer contents are not analyzed")
         skipped = sum(len(r.data.get("members_not_analyzed", [])) for r in report.results)
         if skipped:
             confidence = "low"
