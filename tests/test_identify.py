@@ -172,3 +172,18 @@ def test_padded_script_is_identified_by_name(make_file, name, lang):
 def test_text_with_other_names_stays_text(make_file):
     for name in ("notes.txt", "README", "a.exe"):
         assert identify(make_file(name, b"plain words only\n")).kind == "text"
+
+
+def test_opc_software_package_is_a_zip(make_file):
+    # NuGet, VSIX and MSIX packages share Office's [Content_Types].xml but are archives of
+    # software; they must be extracted so the scripts and programs inside get analyzed.
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("tools/install.ps1", "Write-Output 'hi'")
+        zf.writestr("Module.nuspec", "<package/>")
+    ft = identify(make_file("Module.nupkg", buf.getvalue()))
+    assert ft.kind == "zip" and ft.details["looks_like"] == "OPC package"
+    assert ft.mismatches == []

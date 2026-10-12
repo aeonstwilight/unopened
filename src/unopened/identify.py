@@ -231,6 +231,16 @@ def _identify_zip(path: Path) -> FileType:
             subtype, app = "excel", "Excel"
         elif any(n.startswith("ppt/") for n in lowered):
             subtype, app = "powerpoint", "PowerPoint"
+        elif not has_macros:
+            # Same packaging format (Open Packaging Conventions) as Office, but a software
+            # package: NuGet, VSIX, MSIX/APPX. Treated as a zip so its files are extracted
+            # and analyzed. M5 benign corpus 2: PowerShell Gallery modules were otherwise
+            # read as unknown Office documents and their scripts never examined.
+            return FileType(
+                "zip", "ZIP archive (Open Packaging Conventions package: NuGet, VSIX, "
+                "MSIX/APPX or similar)",
+                details={"members": len(names), "looks_like": "OPC package"},
+            )
         else:
             subtype, app = "other", "Office Open XML"
         macro = " with a VBA project (macros)" if has_macros else ""
