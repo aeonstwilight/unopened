@@ -222,3 +222,22 @@ def test_invalid_or_unverified_signature_leaves_yara_alone(valid):
     rs = _yara_results(valid=valid)
     temper_for_valid_signature(rs)
     assert rs[1].findings[0].severity == Severity.HIGH
+
+
+# Valid signature lowers packing (M5 corpus 2: Rufus, UPX-packed and signed) ------------
+
+@pytest.mark.parametrize("valid, expected", [(True, Severity.LOW), (False, Severity.MEDIUM)])
+def test_packing_on_a_validly_signed_file_is_low(valid, expected):
+    from unopened.model import AnalyzerResult
+    from unopened.pipeline import temper_for_valid_signature
+    rs = [AnalyzerResult("authenticode", Status.OK, data={"signed": True, "valid": valid}),
+          AnalyzerResult("pe", Status.OK, findings=[
+              Finding("pe.packer_section", Severity.MEDIUM, "Packer section name: UPX0", "d"),
+              Finding("pe.high_entropy_section", Severity.MEDIUM, "High entropy", "d"),
+              Finding("pe.no_imports", Severity.MEDIUM, "No imports", "d")])]
+    temper_for_valid_signature(rs)
+    packer, entropy, other = rs[1].findings
+    assert packer.severity == entropy.severity == expected
+    assert other.severity == Severity.MEDIUM  # only packing findings are tempered
+    if valid:
+        assert "valid Authenticode signature" in packer.detail

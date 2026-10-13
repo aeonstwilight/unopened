@@ -19,7 +19,19 @@ from . import Context
 MAX_TEXT = 5 * 1024 * 1024
 MAX_SHOWN = 4_000
 LONG_LINE = 2_000
-NOISY_CONCAT = 10  # this many joined fragments is obfuscation, not style
+_NUM = r"(?:&H[0-9a-fA-F]+|0x[0-9a-fA-F]+|\d+)"
+CHAR_CODE_RUNS = [  # three or more char codes in a row
+    re.compile(rf"(?i)(?:\bChrW?\$?\(\s*{_NUM}\s*\)\s*[&+]\s*){{2,}}\bChrW?\$?\(\s*{_NUM}\s*\)"),
+    re.compile(rf"(?i)(?:\[char\]\s*{_NUM}\s*\+\s*){{2,}}\[char\]\s*{_NUM}"),
+    re.compile(rf"fromCharCode\(\s*{_NUM}(?:\s*,\s*{_NUM}){{2,}}\s*\)"),
+    re.compile(rf"(?i)\[char\[\]\]\s*\(\s*{_NUM}(?:\s*,\s*{_NUM}){{2,}}"),
+]
+LITERAL = re.compile(r"""'[^'\r\n]*'|"[^"\r\n]*\"""")
+LITERAL_CHAIN = re.compile(
+    r"""(?:(?:'[^'\r\n]*'|"[^"\r\n]*")\s*[+&]\s*){2,}(?:'[^'\r\n]*'|"[^"\r\n]*")""")
+CHAIN_MIN = 4   # literals joined back to back
+CHAINS_MIN = 3  # this many such chains is a pattern, not one formatting line
+LONG_CHAIN = 8  # or one chain this long
 
 
 @cache
@@ -82,8 +94,6 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
         out.not_checked.append("Deobfuscated output beyond the size cap")
 
     techniques = result.techniques()
-    concat_steps = sum(layer.count for layer in result.layers
-                       if layer.technique == "string concatenation")
     longest = max((len(line) for line in text.splitlines()), default=0)
     out.data = {
         "language": language,
@@ -100,10 +110,20 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
     out.data["keywords"] = hits
     out.findings += keyword_findings("script", hits, "the script")
 
-    encoded = techniques & {"base64", "char codes"}
-    if encoded or concat_steps >= NOISY_CONCAT:
-        what = sorted(encoded) + (["heavy string concatenation"]
-                                  if concat_steps >= NOISY_CONCAT else [])
+    # Shape, not count: obfuscation chains char codes and literals together (Chr(104) &
+    # Chr(116) & Chr(116) & Chr(112) spells "http"); ordinary code uses them one at a time
+    # (Chr(34) & name & Chr(34)). M5 corpus 2: slmgr.vbs and jQuery have hundreds of
+    # isolated ones and were called obfuscated. Runs are found in the text as written.
+    char_runs = sum(len(rx.findall(text)) for rx in CHAR_CODE_RUNS)
+    chains = [len(LITERAL.findall(m.group(0))) for m in LITERAL_CHAIN.finditer(text)]
+    heavy_concat = (sum(1 for n in chains if n >= CHAIN_MIN) >= CHAINS_MIN
+                    or any(n >= LONG_CHAIN for n in chains))
+    encoded = (techniques & {"base64"}) | ({"char codes"} if char_runs else set())
+    out.data["obfuscation_shape"] = {"char_code_runs": char_runs,
+                                     "literal_chains": sum(1 for n in chains if n >= CHAIN_MIN),
+                                     "longest_chain": max(chains, default=0)}
+    if encoded or heavy_concat:
+        what = sorted(encoded) + (["heavy string concatenation"] if heavy_concat else [])
         out.findings.append(Finding(
             "script.obfuscated", Severity.MEDIUM, "Script is obfuscated",
             f"Uses {', '.join(what)} to hide its text. The decoded form is shown in the "

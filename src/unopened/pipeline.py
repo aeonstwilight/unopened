@@ -253,19 +253,31 @@ SIGNED_YARA_NOTE = (
 )
 
 
+SIGNED_PACKING_NOTE = (
+    " The file carries a valid Authenticode signature: publishers sign packed and "
+    "self-extracting builds routinely (M5 corpus 2: Rufus, a UPX-packed tool signed by its "
+    "developer), so packing on a signed file is rated LOW. A valid signature is not proof "
+    "of safety."
+)
+PACKING_FINDINGS = {"pe.packer_section", "pe.wx_section", "pe.high_entropy_section"}
+
+
 def temper_for_valid_signature(results: list[AnalyzerResult]) -> None:
-    """A lone HIGH YARA match on a validly signed file becomes MEDIUM, with a note.
-    Other evidence, including behavior patterns, is unchanged."""
+    """On a validly signed file, a lone HIGH YARA match becomes MEDIUM and packing
+    findings become LOW, each with a note. Other evidence, including behavior patterns,
+    is unchanged."""
     sig = next((r for r in results if r.name == "authenticode"), None)
     if sig is None or not (sig.data or {}).get("valid"):
         return
     for r in results:
-        if r.name != "yara":
-            continue
         for i, f in enumerate(r.findings):
-            if f.id == "yara.match" and f.severity == Severity.HIGH:
+            if r.name == "yara" and f.id == "yara.match" and f.severity == Severity.HIGH:
                 r.findings[i] = Finding(f.id, Severity.MEDIUM, f.title,
                                         f.detail + SIGNED_YARA_NOTE, f.source)
+            elif (r.name == "pe" and f.id in PACKING_FINDINGS
+                  and f.severity in (Severity.HIGH, Severity.MEDIUM)):
+                r.findings[i] = Finding(f.id, Severity.LOW, f.title,
+                                        f.detail + SIGNED_PACKING_NOTE, f.source)
 
 
 def container_findings(children: list[dict[str, Any]]) -> list[Finding]:

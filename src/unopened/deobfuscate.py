@@ -180,7 +180,14 @@ PASSES = [("base64", _pass_base64), ("char codes", _pass_charcodes),
 
 
 def deobfuscate(text: str, max_rounds: int = MAX_ROUNDS, max_chars: int = MAX_CHARS) -> Result:
-    result = Result(text[:max_chars], truncated=len(text) > max_chars)
+    if len(text) > max_chars:
+        # Head and tail: padding usually sits before the payload (M5 holdout: scripts of
+        # several MB led by junk), so the end of the file matters as much as the start.
+        half = max_chars // 2
+        window = text[:half] + "\n" + text[-half:]
+    else:
+        window = text
+    result = Result(window, truncated=len(text) > max_chars)
     for _ in range(max_rounds):
         changed = False
         for name, func in PASSES:

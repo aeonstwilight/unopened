@@ -133,7 +133,10 @@ def _walk(reader: Any, writer: MemberWriter, out: AnalyzerOutput) -> None:
             out.not_checked.append(f"PDF objects beyond the first {MAX_OBJECTS:,}")
             break
         if isinstance(obj, DictionaryObject):
-            _inspect(obj, auto, via, writer, out)
+            try:
+                _inspect(obj, auto, via, writer, out)
+            except Exception as exc:  # one odd object must not end the walk (M5 corpus 2)
+                out.errors.append(f"object {via}: {type(exc).__name__}: {exc}")
             for k, v in obj.items():
                 if k in ("/Parent", "/P"):
                     continue  # back-links; the target is reached from above anyway
@@ -187,6 +190,8 @@ def _embedded(spec: Any, writer: MemberWriter, out: AnalyzerOutput) -> None:
     if ef is None:
         return
     ef = ef.get_object()
+    if not hasattr(ef, "get"):
+        return  # /EF that is not an embedded-file dictionary (seen in IRS fill-in forms)
     stream_ref = ef.get("/UF") or ef.get("/F")
     if stream_ref is None:
         return

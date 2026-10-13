@@ -54,7 +54,8 @@ CASES = [
     ("V-REP-01", dict(reputation={"malwarebazaar": "found"})),
     ("V-REP-02", dict(reputation={"virustotal": 12})),
     ("V-MAL-02", dict(kind="ooxml", findings=[("office.autoexec", H, "office"),
-                                              ("office.suspicious_keywords", M, "office")])),
+                                              ("office.suspicious_keywords", M, "office")],
+                      data={"office": {"suspicious": [{"keyword": "Shell"}]}})),
     ("V-MAL-03", dict(kind="lnk", findings=[("lnk.lolbin_target", H, "lnk"),
                                             ("lnk.encoded_powershell", H, "lnk")])),
     ("V-MAL-04", dict(kind="ooxml", findings=[("office.dde", H, "office")])),
@@ -151,3 +152,16 @@ def test_unanswered_reputation_lowers_no_findings():
 
 def test_zero_vt_detections_is_not_suspicious():
     assert report(reputation={"virustotal": 0}).verdict["value"] == "no findings"
+
+
+@pytest.mark.parametrize("keywords, expected", [
+    (["CreateObject", "Environ"], "suspicious"),   # M5 corpus 2: autolog.xlsm
+    (["CreateObject", "Run"], "malicious"),
+    (["URLDownloadToFileA"], "malicious"),
+    (["Shell.Application"], "malicious"),
+])
+def test_auto_run_macro_is_malicious_only_when_it_runs_or_fetches(keywords, expected):
+    r = report(kind="ooxml", findings=[("office.autoexec", H, "office"),
+                                       ("office.suspicious_keywords", M, "office")],
+               data={"office": {"suspicious": [{"keyword": k} for k in keywords]}})
+    assert r.verdict["value"] == expected

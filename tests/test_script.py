@@ -57,3 +57,44 @@ def test_deobfuscated_text_is_reported(make_file, arch_fx):
 def test_long_line(make_file):
     r = analyze(make_file("x.ps1", b"$a = '" + b"A" * 3000 + b"'\nWrite-Host $a\n$b = 1\n"))
     assert "script.long_line" in ids(r)
+
+
+# M5 benign corpus 2: large legitimate scripts ----------------------------------------
+
+def _repeat(n_kib: int, block: str) -> bytes:
+    return (block * (n_kib * 1024 // len(block) + 1)).encode()[:n_kib * 1024]
+
+
+def test_web_library_regex_exec_is_not_running_programs(make_file):
+    # jQuery-like: RegExp.exec( throughout, an occasional joined literal, a computed
+    # fromCharCode (jQuery decodes CSS escapes this way).
+    plain = "var m = rquick.exec( selector );\n" * 40
+    body = _repeat(200, plain + "var s = '[' + 'x' + ']';\n")
+    body += b"var c = String.fromCharCode( high + 0x10000 );\n"
+    r = analyze(make_file("lib.js", body))
+    assert "script.js.shell" not in ids(r)
+    assert "script.obfuscated" not in ids(r)
+
+
+def test_wsh_run_and_exec_still_match(make_file):
+    r = analyze(make_file("a.js", b"var sh = new ActiveXObject('WScript.Shell');\n"
+                                  b"sh.Run('notepad.exe'); sh.Exec('cmd /c ver');\n"))
+    assert "script.js.shell" in ids(r)
+
+
+def test_admin_vbscript_with_a_few_chr_calls_is_not_obfuscated(make_file):
+    # slmgr.vbs style: 140 KB of ordinary code with a Chr(34) every few dozen lines.
+    plain = '    strOut = strOut & strName & vbCrLf\n' * 40
+    body = _repeat(140, plain + 'WScript.Echo Chr(34) & strOut & Chr(34)\n')
+    r = analyze(make_file("admin.vbs", b"Option Explicit\n" + body))
+    assert r.data["obfuscation_shape"]["char_code_runs"] == 0
+    assert "script.obfuscated" not in ids(r)
+
+
+def test_padding_does_not_hide_heavy_char_code_obfuscation(make_file):
+    # Density alone would be diluted by padding; the absolute count still catches it,
+    # and the decoder reads the end of a large script, where the payload sits.
+    payload = b"s = " + b" & ".join(b"Chr(%d)" % (65 + i % 26) for i in range(120)) + b"\n"
+    padding = b"' " + b"x" * 78 + b"\n"
+    r = analyze(make_file("p.vbs", b"Dim s\n" + padding * 20_000 + payload))
+    assert "script.obfuscated" in ids(r)

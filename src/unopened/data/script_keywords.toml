@@ -89,7 +89,9 @@ tags = ["com"]
 
 [[javascript]]
 id = "js.shell"
-pattern = '(?i)WScript\.Shell|Shell\.Application|\.ShellExecute\b|\.Run\s*\(|\.Exec\s*\('
+# Case matters: JavaScript is case-sensitive, so WSH's .Run( and .Exec( are capitalised,
+# while RegExp.exec( (lower case) is in every web library. M5 corpus 2: jQuery matched.
+pattern = '(?i:WScript\.Shell|Shell\.Application)|\.ShellExecute\b|\.Run\s*\(|\.Exec\s*\('
 severity = "medium"
 title = "Runs programs or commands"
 tags = ["execute"]
