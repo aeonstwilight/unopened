@@ -98,3 +98,18 @@ def test_padding_does_not_hide_heavy_char_code_obfuscation(make_file):
     padding = b"' " + b"x" * 78 + b"\n"
     r = analyze(make_file("p.vbs", b"Dim s\n" + padding * 20_000 + payload))
     assert "script.obfuscated" in ids(r)
+
+
+def test_binary_stream_without_a_fetch_is_not_a_downloader(make_file):
+    # slmgr.vbs: ADODB.Stream for files plus Eval to look up message strings.
+    r = analyze(make_file("admin.vbs", b'Set oStream = CreateObject("ADODB.Stream")\n'
+                                       b'GetResource = Eval(name)\n'))
+    found = ids(r)
+    assert "script.vbs.binary_write" in found and "script.download_execute" not in found
+
+
+def test_fetch_save_and_run_is_still_a_downloader(make_file):
+    r = analyze(make_file("dl.vbs", b'Set x = CreateObject("MSXML2.XMLHTTP")\n'
+                                    b'Set s = CreateObject("ADODB.Stream")\n'
+                                    b'CreateObject("WScript.Shell").Run "a.exe"\n'))
+    assert ids(r)["script.download_execute"] == Severity.HIGH

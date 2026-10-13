@@ -121,10 +121,19 @@ tags = ["execute"]
 
 [[vbscript]]
 id = "vbs.download"
-pattern = '(?i)MSXML2\.(?:Server)?XMLHTTP|WinHttp\.WinHttpRequest|Microsoft\.XMLHTTP|ADODB\.Stream'
+pattern = '(?i)MSXML2\.(?:Server)?XMLHTTP|WinHttp\.WinHttpRequest|Microsoft\.XMLHTTP'
 severity = "medium"
-title = "Downloads or writes files (XMLHTTP / ADODB.Stream)"
+title = "Downloads from the internet (XMLHTTP / WinHttp)"
 tags = ["download"]
+
+# ADODB.Stream writes binary files: the second half of a classic downloader, but it fetches
+# nothing on its own. M5 corpus 2: slmgr.vbs uses it for files and was called a downloader.
+[[vbscript]]
+id = "vbs.binary_write"
+pattern = '(?i)ADODB\.Stream'
+severity = "low"
+title = "Writes binary files (ADODB.Stream)"
+tags = ["file_write"]
 
 [[vbscript]]
 id = "vbs.execute"
