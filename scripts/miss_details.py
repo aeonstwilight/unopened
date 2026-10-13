@@ -7,6 +7,7 @@ indicator counts by kind. Indicator values and member names are never printed, s
 output is safe to copy out of the analysis VM.
 
     python3 scripts/miss_details.py ~/validation-results/holdout-diag/reports
+    python3 scripts/miss_details.py DIR --all     # every report, e.g. benign false positives
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ def show(r: dict[str, Any], pad: str = "") -> None:
     for name, a in analyzers.items():
         if a.get("status") not in ("ok", "not_applicable"):
             print(f"{pad}  ! {name}: {a.get('status')} {str(a.get('message', ''))[:90]}")
+            for err in (a.get("errors") or [])[:3]:
+                print(f"{pad}      error: {str(err)[:110]}")
     for f in r.get("findings", []):
         print(f"{pad}  {f['severity'].upper():6} {f['id']}: {f['title'][:80]}")
     caps = (analyzers.get("capa", {}).get("data") or {}).get("capabilities") or []
@@ -48,14 +51,18 @@ def show(r: dict[str, Any], pad: str = "") -> None:
 
 
 def main(argv: list[str]) -> int:
+    show_all = "--all" in argv
+    argv = [a for a in argv if a != "--all"]
     if len(argv) != 1:
         print(__doc__, file=sys.stderr)
         return 2
     for path in sorted(Path(argv[0]).rglob("*.json")):
         report = json.loads(path.read_text(encoding="utf-8"))
-        if (report.get("verdict") or {}).get("value") in MISSES:
+        if show_all or (report.get("verdict") or {}).get("value") in MISSES:
             print("=" * 70)
-            print(report["hashes"].get("sha256", "")[:16], report["file"]["size"])
+            # --all is for benign files, whose names are safe to show; misses stay nameless.
+            label = report["file"].get("name", "") if show_all else ""
+            print(report["hashes"].get("sha256", "")[:16], report["file"]["size"], label)
             show(report)
     return 0
 
