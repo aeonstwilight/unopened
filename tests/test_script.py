@@ -113,3 +113,19 @@ def test_fetch_save_and_run_is_still_a_downloader(make_file):
                                     b'Set s = CreateObject("ADODB.Stream")\n'
                                     b'CreateObject("WScript.Shell").Run "a.exe"\n'))
     assert ids(r)["script.download_execute"] == Severity.HIGH
+
+
+def test_char_code_run_of_whitespace_is_not_obfuscation(make_file):
+    # slmgr.vbs: its only char-code run builds line breaks and a tab.
+    body = b'Const NL = Chr(13) & Chr(10) & Chr(9)\nWScript.Echo "x" & NL\n'
+    r = analyze(make_file("a.vbs", body))
+    assert r.data["obfuscation_shape"]["char_code_runs"] == 0
+    assert "script.obfuscated" not in ids(r)
+
+
+@pytest.mark.parametrize("code", [b"Chr(104) & Chr(116) & Chr(116) & Chr(112)",
+                                  b"Chr(&H68) & Chr(&H74) & Chr(&H74)",
+                                  b"ChrW(104) + ChrW(116) + ChrW(112)"])
+def test_char_code_run_that_spells_text_is_obfuscation(make_file, code):
+    r = analyze(make_file("a.vbs", b"s = " + code + b"\n"))
+    assert "script.obfuscated" in ids(r)

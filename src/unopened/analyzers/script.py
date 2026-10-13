@@ -26,6 +26,20 @@ CHAR_CODE_RUNS = [  # three or more char codes in a row
     re.compile(rf"fromCharCode\(\s*{_NUM}(?:\s*,\s*{_NUM}){{2,}}\s*\)"),
     re.compile(rf"(?i)\[char\[\]\]\s*\(\s*{_NUM}(?:\s*,\s*{_NUM}){{2,}}"),
 ]
+_NUM_TOKEN = re.compile(r"(?i)&H([0-9a-f]+)|0x([0-9a-f]+)|(\d+)")
+
+
+def _spells_something(run: str) -> bool:
+    """A char-code run hides text only if it decodes to visible characters. A run of
+    Chr(13) & Chr(10) & Chr(9) builds whitespace (M5 corpus 2: the one run in slmgr.vbs)."""
+    visible = 0
+    for h, x, d in _NUM_TOKEN.findall(run):
+        code = int(h, 16) if h else int(x, 16) if x else int(d)
+        if 33 <= code < 0x110000 and chr(code).isprintable():
+            visible += 1
+    return visible >= 3
+
+
 LITERAL = re.compile(r"""'[^'\r\n]*'|"[^"\r\n]*\"""")
 LITERAL_CHAIN = re.compile(
     r"""(?:(?:'[^'\r\n]*'|"[^"\r\n]*")\s*[+&]\s*){2,}(?:'[^'\r\n]*'|"[^"\r\n]*")""")
@@ -114,7 +128,8 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
     # Chr(116) & Chr(116) & Chr(112) spells "http"); ordinary code uses them one at a time
     # (Chr(34) & name & Chr(34)). M5 corpus 2: slmgr.vbs and jQuery have hundreds of
     # isolated ones and were called obfuscated. Runs are found in the text as written.
-    char_runs = sum(len(rx.findall(text)) for rx in CHAR_CODE_RUNS)
+    char_runs = sum(1 for rx in CHAR_CODE_RUNS for m in rx.finditer(text)
+                    if _spells_something(m.group(0)))
     chains = [len(LITERAL.findall(m.group(0))) for m in LITERAL_CHAIN.finditer(text)]
     heavy_concat = (sum(1 for n in chains if n >= CHAIN_MIN) >= CHAINS_MIN
                     or any(n >= LONG_CHAIN for n in chains))
