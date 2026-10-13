@@ -302,7 +302,15 @@ SCRIPT_NAMES = {
 }
 
 
+JSON_START = re.compile(r'^\s*(?:\{\s*"|\[\s*[{\["\d\-]|\[\s*\])')
+
+
 def _identify_text(text: str) -> FileType:
+    # JSON data names cmdlets and APIs as strings and scored as PowerShell. M5 corpus 2: a
+    # PSScriptAnalyzer settings file listing Invoke-WebRequest, Invoke-Expression and
+    # Start-Process was judged a malicious script. No script language starts like this.
+    if JSON_START.match(text):
+        return FileType("text", "JSON data", subtype="json")
     scores = {
         lang: sum(1 for p in patterns if re.search(p, text, re.MULTILINE))
         for lang, patterns in SCRIPT_HINTS.items()

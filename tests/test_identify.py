@@ -187,3 +187,18 @@ def test_opc_software_package_is_a_zip(make_file):
     ft = identify(make_file("Module.nupkg", buf.getvalue()))
     assert ft.kind == "zip" and ft.details["looks_like"] == "OPC package"
     assert ft.mismatches == []
+
+
+def test_json_listing_cmdlets_is_data_not_a_script(make_file):
+    # M5 corpus 2: PSScriptAnalyzer's core-6.1.0-windows.json scored as PowerShell.
+    data = (b'{\n  "Modules": [\n    {"Name": "Microsoft.PowerShell.Utility", "ExportedCmdlets": '
+            b'["Invoke-WebRequest", "Invoke-Expression", "Invoke-RestMethod", "New-Object", '
+            b'"Start-Process", "Set-Variable", "Get-Content", "Write-Output"]}\n  ]\n}\n')
+    ft = identify(make_file("core-6.1.0-windows.json", data))
+    assert (ft.kind, ft.subtype) == ("text", "json")
+    assert ft.mismatches == []
+
+
+def test_script_named_js_starting_like_json_is_still_a_script(make_file):
+    ft = identify(make_file("a.js", b'["a", "b"].forEach(function (x) { WScript.Echo(x); });\n'))
+    assert ft.kind == "script"

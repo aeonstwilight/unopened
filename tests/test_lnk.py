@@ -90,3 +90,14 @@ def test_unc_target(make_file, lnk_fx):
 def test_garbage_after_header_fails_loudly(make_file, lnk_fx):
     r = analyze(make_file("x.lnk", lnk_fx.benign_notepad()[:90]))
     assert r.status in (Status.ERROR, Status.PARTIAL)
+
+
+@pytest.mark.parametrize("signature, text, expected", [
+    (0xA0000001, r"%windir%\system32\charmap.exe", r"%windir%\system32\charmap.exe"),
+    (0xA0000006, "w_1^VY5-d}...fixture", "Windows Installer advertised shortcut"),
+])
+def test_target_kept_outside_link_info(make_file, lnk_fx, signature, text, expected):
+    # M5 corpus 2: 17 Start-menu shortcuts were "partial" with no target found.
+    r = analyze(make_file("Character Map.lnk", lnk_fx.target_in_block(signature, text)))
+    assert r.status == Status.OK, r.errors
+    assert expected in r.data["shortcut"]["target"]

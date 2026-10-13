@@ -104,3 +104,21 @@ def padded_cmd() -> bytes:
 
 def with_appended_data() -> bytes:
     return build_lnk("C:\\Windows\\System32\\notepad.exe", appended=b"MZ" + bytes(200))
+
+
+HAS_EXP_STRING = 0x200
+HAS_DARWIN_ID = 0x1000
+
+
+def _path_block(signature: int, text: str) -> bytes:
+    """EnvironmentVariableDataBlock / DarwinDataBlock: 260-byte ANSI + 520-byte Unicode."""
+    return (struct.pack("<II", 0x314, signature) + text.encode("latin-1").ljust(260, b"\0")
+            + text.encode("utf-16-le").ljust(520, b"\0"))
+
+
+def target_in_block(signature: int, text: str) -> bytes:
+    """A shortcut with no LinkInfo, as Windows writes for Start-menu entries."""
+    flags = IS_UNICODE | (HAS_EXP_STRING if signature == 0xA0000001 else HAS_DARWIN_ID)
+    header = struct.pack("<I16sIIQQQIiIHHII", 0x4C, LINK_CLSID, flags, 0x20, 0, 0, 0, 0, 0,
+                         SW_SHOWNORMAL, 0, 0, 0, 0)
+    return header + _path_block(signature, text) + b"\0\0\0\0"
