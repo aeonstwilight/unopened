@@ -220,9 +220,9 @@ traced with `scripts/miss_details.py --all`:
 |---|---|---|---|
 | `slmgr.vbs` (Microsoft) | malicious | Isolated `Chr()` calls counted as obfuscation, on top of real download and execute keywords | Obfuscation is judged by shape: runs of chained char codes or joined literals |
 | `autolog.xlsm` (test workbook) | malicious | Auto-run plus `CreateObject`: the macro rule treated object creation like running programs | Malicious needs auto-run plus running programs, downloading or calling Windows; auto-run alone stays suspicious |
-| `PSScriptAnalyzer.nupkg` | malicious | One member, a 184 KB file that is not a `.ps1`, was identified as PowerShell by content and has download, `Invoke-Expression` and `Start-Process` | Open: identity of the member to confirm |
+| `PSScriptAnalyzer.nupkg` | malicious | One member, `Settings/core-6.1.0-windows.json`, lists cmdlet names (`Invoke-WebRequest`, `Invoke-Expression`, `Start-Process`) and was identified as a PowerShell script by content | Text that opens like JSON is identified as JSON data before the script heuristics run |
 | `jquery.js` | suspicious | `RegExp.exec(` matched "runs programs" (case was ignored), plus the obfuscation count | Case-sensitive method names; obfuscation by shape |
-| `ImportExcel.nupkg` | suspicious | One member script: obfuscated plus `Invoke-Expression` | Expected to clear with the obfuscation change; to confirm |
+| `ImportExcel.nupkg` | suspicious | One member, `Examples/OutTabulator/start-demo.ps1`: obfuscated plus `Invoke-Expression` | Expected to clear with the obfuscation change; run 2 will show |
 | Rufus, Firefox installers | suspicious | Three MEDIUM findings, mostly packing on validly signed files, plus "capa results are limited" | Packing on a validly signed PE is LOW; "capa results are limited" is INFO, since it describes what was not seen |
 
 It also found two parser problems that a clean verdict had hidden:
@@ -232,7 +232,10 @@ It also found two parser problems that a clean verdict had hidden:
   seen. Fixed: the odd entry is skipped, and a failing object is reported while the walk
   continues. The W-4 now shows its three JavaScript blocks (field calculations) and
   still comes back "no findings".
-- **17 shortcuts were partly analyzed.** Cause to confirm.
+- **17 shortcuts were partly analyzed.** Windows' own Start-menu shortcuts (Character Map
+  among them) keep their target only in the environment-variable block
+  (`%windir%\system32\charmap.exe`) or name a Windows Installer product instead of a path.
+  Both are now read.
 
 Run 2 of this corpus, after the fixes, will be reported here next to run 1.
 
