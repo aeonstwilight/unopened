@@ -30,12 +30,14 @@ _NUM_TOKEN = re.compile(r"(?i)&H([0-9a-f]+)|0x([0-9a-f]+)|(\d+)")
 
 
 def _spells_something(run: str) -> bool:
-    """A char-code run hides text only if it decodes to visible characters. A run of
-    Chr(13) & Chr(10) & Chr(9) builds whitespace (M5 corpus 2: the one run in slmgr.vbs)."""
+    """A char-code run hides text only if it spells visible ASCII: obfuscation hides URLs,
+    commands and API names. M5 corpus 2: slmgr.vbs builds the UTF-8 byte-order mark,
+    Chr(239) + Chr(187) + Chr(191), to check a file's encoding; whitespace runs such as
+    Chr(13) & Chr(10) & Chr(9) are not text either."""
     visible = 0
     for h, x, d in _NUM_TOKEN.findall(run):
         code = int(h, 16) if h else int(x, 16) if x else int(d)
-        if 33 <= code < 0x110000 and chr(code).isprintable():
+        if 33 <= code <= 126:
             visible += 1
     return visible >= 3
 

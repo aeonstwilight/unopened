@@ -115,9 +115,12 @@ def test_fetch_save_and_run_is_still_a_downloader(make_file):
     assert ids(r)["script.download_execute"] == Severity.HIGH
 
 
-def test_char_code_run_of_whitespace_is_not_obfuscation(make_file):
-    # slmgr.vbs: its only char-code run builds line breaks and a tab.
-    body = b'Const NL = Chr(13) & Chr(10) & Chr(9)\nWScript.Echo "x" & NL\n'
+@pytest.mark.parametrize("body", [
+    b'Const NL = Chr(13) & Chr(10) & Chr(9)\nWScript.Echo "x" & NL\n',
+    # slmgr.vbs: its one run builds the UTF-8 byte-order mark to check a file's encoding.
+    b'If Left(s, 3) = Chr(239) + Chr(187) + Chr(191) Then s = Mid(s, 4)\n',
+])
+def test_char_code_run_that_is_not_text_is_not_obfuscation(make_file, body):
     r = analyze(make_file("a.vbs", body))
     assert r.data["obfuscation_shape"]["char_code_runs"] == 0
     assert "script.obfuscated" not in ids(r)
