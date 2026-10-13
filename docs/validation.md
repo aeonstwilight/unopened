@@ -24,7 +24,8 @@ numbers can be reproduced and challenged.
 | Set | Files | Ground truth |
 |---|---|---|
 | RPISEC Malware course labs | 17 PE samples in 9 zipped labs | Each lab's `solution.md` ([RPISEC/Malware](https://github.com/RPISEC/Malware), credited in `validation/rpisec-labs.csv`) |
-| Benign corpus | 201 files | Ordinary Windows software: Sysinternals Suite, the Python 3.12 embeddable build, the 7-Zip 24.08 installer, PuTTY |
+| Benign corpus 1 | 201 files | Ordinary Windows software: Sysinternals Suite, the Python 3.12 embeddable build, the 7-Zip 24.08 installer, PuTTY |
+| Benign corpus 2 | 146 files (plus their contents) | Everything corpus 1 lacked: Office files including five with macros written for the test, IRS fill-in PDFs, PowerShell Gallery modules, JavaScript libraries, Windows' own VBScript and batch files, Start-menu shortcuts, and installers fetched with winget |
 | Current samples (holdout) | 30 MalwareBazaar samples, 13 file types | MalwareBazaar tags; samples the rules were not written against |
 
 ## Results: RPISEC labs
@@ -201,6 +202,39 @@ Read this number with three limits in mind:
 - **The corpus is mostly signed Windows tools.** It has one unsigned installer (7-Zip),
   no documents, scripts or shortcuts. The dropper pattern stays at MEDIUM: one unsigned
   installer is not enough evidence to promote it.
+
+## Results: benign corpus 2
+
+Built to cover what corpus 1 did not (October 12): 146 files. Office documents and
+workbooks, including macro workbooks written for this test (formatting, a date stamp on
+open, a CSV export with `FileSystemObject`, and one that creates a folder on open); 20 IRS
+fill-in PDFs; five PowerShell Gallery packages, each holding dozens of scripts and
+assemblies; jQuery, lodash, d3, moment and Bootstrap; the VBScript and batch files in a
+Windows `System32` folder; about 40 Start-menu shortcuts; and installers for common
+open-source tools downloaded with `winget`.
+
+**Run 1 failed the target: 3 malicious, 4 suspicious (7 of 146, 4.8%).** Every one was
+traced with `scripts/miss_details.py --all`:
+
+| File | Verdict | Cause | Fix |
+|---|---|---|---|
+| `slmgr.vbs` (Microsoft) | malicious | Isolated `Chr()` calls counted as obfuscation, on top of real download and execute keywords | Obfuscation is judged by shape: runs of chained char codes or joined literals |
+| `autolog.xlsm` (test workbook) | malicious | Auto-run plus `CreateObject`: the macro rule treated object creation like running programs | Malicious needs auto-run plus running programs, downloading or calling Windows; auto-run alone stays suspicious |
+| `PSScriptAnalyzer.nupkg` | malicious | One member, a 184 KB file that is not a `.ps1`, was identified as PowerShell by content and has download, `Invoke-Expression` and `Start-Process` | Open: identity of the member to confirm |
+| `jquery.js` | suspicious | `RegExp.exec(` matched "runs programs" (case was ignored), plus the obfuscation count | Case-sensitive method names; obfuscation by shape |
+| `ImportExcel.nupkg` | suspicious | One member script: obfuscated plus `Invoke-Expression` | Expected to clear with the obfuscation change; to confirm |
+| Rufus, Firefox installers | suspicious | Three MEDIUM findings, mostly packing on validly signed files, plus "capa results are limited" | Packing on a validly signed PE is LOW; "capa results are limited" is INFO, since it describes what was not seen |
+
+It also found two parser problems that a clean verdict had hidden:
+
+- **Every IRS PDF was only partly analyzed.** An `/EF` entry holding an array raised an
+  error that ended the walk through the document, so the forms' JavaScript was never
+  seen. Fixed: the odd entry is skipped, and a failing object is reported while the walk
+  continues. The W-4 now shows its three JavaScript blocks (field calculations) and
+  still comes back "no findings".
+- **17 shortcuts were partly analyzed.** Cause to confirm.
+
+Run 2 of this corpus, after the fixes, will be reported here next to run 1.
 
 ## Runtime
 
