@@ -135,7 +135,8 @@ so their false-positive cost is unmeasured until they are.
 Each fix has a synthetic regression test (`tests/test_holdout_fixes.py`,
 `tests/test_behaviors.py`, `tests/test_pe.py`). Run 2 will be reported next to run 1, not
 in its place, and it is no longer a holdout: these samples shaped the fixes. A fresh
-holdout set is the honest check of them.
+holdout set is the honest check of them. The fixes were checked against the benign corpus
+in run 3 below: no new false positives.
 
 Runtime: median 7.2 s per file, slowest 908 s (an ISO stopped by the 900-second file
 budget, its first real use), 50 minutes in total. capa timed out on 4 files.
@@ -151,6 +152,7 @@ fewer than 5% of files.
 |---|---|---|---|
 | 1. After the RPISEC fixes and behavior patterns | 4 | 62 | **32.8%** (66 of 201) |
 | 2. After the fixes below | 0 | 1 | **0.5%** (1 of 201) |
+| 3. After the holdout fixes (new patterns, failed-signature rule, script and OPC identification, time budget) | 0 | 1 | **0.5%** (1 of 201) |
 
 **Run 1 failed the target badly.** Diagnostics on 13 representative files found four
 causes:
@@ -174,6 +176,16 @@ causes:
    an auto-generated Snake rule on BgInfo, a RisePro rule on handle.exe, and a rule that
    detects .NET single-file bundles on RDCMan. A lone HIGH YARA match on a file with a
    valid signature is now MEDIUM, with a note that certificates can be stolen.
+
+**Run 3 repeated the corpus after the holdout fixes** (October 12, corpus rebuilt from the
+same sources: the Sysinternals Suite as published that day, the Python 3.12.7 embeddable
+build, 7-Zip 24.08, PuTTY). Same result: 0 malicious, 1 suspicious, the same ZoomIt64. The
+six new behavior patterns and the rule that a failed signature lends no trust added no false
+positives here. The slowest file took 901 s, inside the 900-second file budget plus the
+cleanup after it, where run 2's slowest took 1,356 s. The run was interrupted once by a
+crash of the Python process (a bus error, with disk and memory to spare) after 187 files
+and resumed with `--resume`; the remaining files completed normally, including the one it
+was working on.
 
 **Run 2 met the target**: no malicious verdicts and one suspicious file. The remaining
 false positive is ZoomIt64, where three MEDIUM heuristics stack up (V-SUS-04). It is left
