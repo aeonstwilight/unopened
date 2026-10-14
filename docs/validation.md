@@ -156,9 +156,22 @@ analyze (a password-protected PDF, tag `pass`), 22 no findings. Without the two 
 PDFs: 8 of 29.
 
 That is lower than set 1's first run (11 of 30), on a different mix: set 2 has more
-compiled programs and loaders, and the misses are mostly EXEs and DLLs. Whether the
-corpus 2 fixes cost any detection is checked separately below, by running this same set
-on the rules as they stood before those fixes.
+compiled programs and loaders, and the misses are mostly EXEs and DLLs.
+
+**Regression check: did the corpus 2 fixes cost detection?** The same 31 samples were run
+on the rules as they stood before the corpus 2 fixes (commit `5cc78aa`): **9 of 31**, one
+more than the current rules. The other 30 results are identical, so the stricter script
+and macro rules did not lose any of this set's scripts or Office files.
+
+The one difference is a .NET RAT in a zip (`3b35d323…`). Under the old rules it had three
+MEDIUM findings (V-SUS-04): a future compile timestamp, a high-entropy `.text` section,
+and "capa results are limited for this file". Corpus 2 lowered that last one to INFO,
+because it describes what capa could not see rather than anything found, and it helped
+push signed installers into false positives. So the old rules caught this sample on a
+weak signal. That change stays. The stronger evidence was in the same report and no rule
+combined it: an unsigned .NET program with an encrypted-looking `.text` section (7.74 of
+8.0) that loads and invokes a .NET assembly from a resource, the usual crypter shape. It
+is a candidate for the set 2 fixes below.
 
 ## Results: benign corpus
 
