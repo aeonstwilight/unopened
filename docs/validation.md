@@ -237,7 +237,30 @@ It also found two parser problems that a clean verdict had hidden:
   (`%windir%\system32\charmap.exe`) or name a Windows Installer product instead of a path.
   Both are now read.
 
-Run 2 of this corpus, after the fixes, will be reported here next to run 1.
+| Run | Malicious | Suspicious | False-positive rate |
+|---|---|---|---|
+| 1. First run | 3 | 4 | **4.8%** (7 of 146) |
+| 2. After the fixes above | 1 | 1 | **1.4%** (2 of 146) |
+| 3. After two more | 0 | 1 | **0.7%** (1 of 146) |
+
+**Run 2** cleared five of the seven and both parser problems. `slmgr.vbs` was still
+malicious, for two reasons found by printing its matching lines: it uses `ADODB.Stream`
+to read and write files, which the rule counted as downloading, and its one run of char
+codes, `Chr(239) + Chr(187) + Chr(191)`, builds the UTF-8 byte-order mark to check a file's
+encoding. Fixes: only XMLHTTP and WinHttp count as downloading (`ADODB.Stream` is a LOW
+file-writing finding), and a char-code run counts as obfuscation only if it spells visible
+ASCII. A real fetch-save-run script still reaches "downloads and runs code"; both cases
+have regression tests.
+
+**Run 3 met the target**: no malicious verdicts and one suspicious file, the test
+workbook that creates a folder when it opens. Its macro runs automatically on open, which
+deserves a look, so it is left as found. In the other direction, these fixes make the
+tool stricter about what counts as malicious; they were checked against the synthetic
+malicious fixtures, and a holdout rerun against them is listed under what remains.
+
+The VM stalled twice during run 3 and killed the run while it was writing a row, which
+exposed a harness bug: `--resume` failed on the cut-off line. Fixed, with a test; the run
+was resumed and completed.
 
 ## Runtime
 
