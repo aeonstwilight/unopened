@@ -144,9 +144,19 @@ when all parts are present, citing the exact evidence.
 | Embedded program, with a YARA match | unsigned + embedded PE + any YARA match | HIGH |
 | Disk image hiding files next to programs | hidden files + programs, shortcuts or scripts in the image | HIGH |
 | Bypasses User Account Control | unsigned + capa: bypass UAC | HIGH |
+| .NET program that loads hidden code from itself | unsigned .NET + high-entropy code section (MEDIUM) + loads or invokes a .NET assembly | HIGH |
+| Finds Windows functions by hash | unsigned + capa: resolve function by ... hash | HIGH |
+| Script with a huge encoded line that reaches Windows | COM objects, commands or Execute/Eval + a line over 500,000 characters | HIGH |
 
-The last five were added after the holdout run in [docs/validation.md](docs/validation.md),
-from combinations seen on real samples the earlier rules had not been written against.
+The five from "Process-injection imports" to "Bypasses User Account Control" were added
+after holdout set 1, and the last three after holdout set 2 (see
+[docs/validation.md](docs/validation.md)), from combinations seen on real samples the
+earlier rules had not been written against.
+
+Archives and disk images also get a cross-member check: a validly signed program shipped
+next to a DLL that calls shellcode (capa: execute shellcode via indirect call, plus RWX
+memory or an embedded PE) and is unsigned, fails verification or is signed by a different
+organization is reported as DLL side-loading (HIGH).
 
 "Unsigned" means a positive not-signed result, or a signature that fails verification
 (untrusted certificate, altered file), since that lends no trust. On a file with a valid

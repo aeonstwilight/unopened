@@ -13,9 +13,14 @@ from unopened.behaviors import PatternError, parse
 from unopened.model import AnalyzerResult, Finding, Severity, Status
 
 
+def _finding(spec: str) -> Finding:
+    # "id" is LOW; "id@medium" gives the severity.
+    fid, _, level = spec.partition("@")
+    return Finding(fid, Severity(level or "low"), fid)
+
+
 def results(capa=(), findings=(), signed: bool | None = False, capa_ok=True):
-    out = [AnalyzerResult("pe", Status.OK,
-                          findings=[Finding(f, Severity.LOW, f) for f in findings])]
+    out = [AnalyzerResult("pe", Status.OK, findings=[_finding(f) for f in findings])]
     out.append(AnalyzerResult(
         "capa", Status.OK if capa_ok else Status.UNAVAILABLE,
         data={"capabilities": [{"name": c} for c in capa]} if capa_ok else {}))
@@ -63,6 +68,11 @@ CASES = {
     "hidden_programs_in_image": ([], ["archive.hidden_files", "container.runnable_member"],
                                  Severity.HIGH),
     "uac_bypass": (["bypass UAC via ICMLuaUtil"], [], Severity.HIGH),
+    "dotnet_crypter": (["load .NET assembly"], ["pe.dotnet", "pe.high_entropy_section@medium"],
+                       Severity.HIGH),
+    "api_hashing": (["resolve function by Brute Ratel Badger hash"], [], Severity.HIGH),
+    "com_script_with_payload_line": ([], ["script.js.activex", "script.long_line@medium"],
+                                     Severity.HIGH),
 }
 
 
@@ -241,3 +251,45 @@ def test_packing_on_a_validly_signed_file_is_low(valid, expected):
     assert other.severity == Severity.MEDIUM  # only packing findings are tempered
     if valid:
         assert "valid Authenticode signature" in packer.detail
+
+
+# Holdout set 2 ---------------------------------------------------------------------
+
+def test_severity_qualified_signal_needs_that_severity():
+    # A high-entropy .rsrc is LOW (resources are often compressed images); only a MEDIUM
+    # one, the code section, counts toward the crypter pattern.
+    capa = ["load .NET assembly", "invoke .NET assembly method"]
+    assert "dotnet_crypter" not in matched(
+        results(capa, ["pe.dotnet", "pe.high_entropy_section"]))
+    assert "com_script_with_payload_line" not in matched(
+        results([], ["script.js.activex", "script.long_line"]))
+
+
+def test_holdout2_dotnet_crypter():
+    # Unsigned .NET RAT: .text at 7.74 of 8.0 (MEDIUM), .rsrc at 7.54 (LOW), and capa's
+    # assembly loading. Run 1: no findings.
+    capa = ["access .NET resource", "compile .NET assembly", "compiled to the .NET platform",
+            "invoke .NET assembly method", "load .NET assembly", "manipulate console buffer"]
+    out = matched(results(capa, ["pe.dotnet", "pe.high_entropy_section@medium",
+                                 "pe.timestamp_future@medium"]))
+    assert out["dotnet_crypter"] == Severity.HIGH
+    # Signed: the same evidence is only a lead.
+    assert matched(results(capa, ["pe.dotnet", "pe.high_entropy_section@medium"],
+                           signed=True))["dotnet_crypter"] == Severity.LOW
+
+
+def test_holdout2_api_hashing_and_other_resolution():
+    assert matched(results(["resolve function by FNV-1a hash"]))["api_hashing"] == Severity.HIGH
+    # Walking the export table by name is not hashing.
+    assert "api_hashing" not in matched(results(["resolve function by parsing PE exports"]))
+    # Hashing data is not resolving functions.
+    assert "api_hashing" not in matched(results(["hash data using murmur3"]))
+
+
+def test_bad_regex_and_severity_are_rejected():
+    with pytest.raises(PatternError):
+        parse({"x": {"title": "t", "severity": "high", "description": "d",
+                     "all": [["capa/("]]}})
+    with pytest.raises(PatternError):
+        parse({"x": {"title": "t", "severity": "high", "description": "d",
+                     "all": [["finding:pe.dotnet@severe"]]}})

@@ -8,6 +8,7 @@ is deleted when triage returns, whether it succeeded or not.
 from __future__ import annotations
 
 import itertools
+import re
 import shutil
 import tempfile
 import time
@@ -303,6 +304,17 @@ def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
             "The classic disk-image lure: the user sees only a shortcut, which runs the hidden "
             f"payload ({', '.join(c['member']['name'] for c in hidden[:5])}).", "container",
         ))
+    sideload = sideload_pair(children)
+    if sideload:
+        exe, dll, why = sideload
+        findings.append(Finding(
+            "container.sideload", Severity.HIGH,
+            "Signed program shipped with a DLL that runs shellcode",
+            f"{exe['member']['name']} carries a valid signature; {dll['member']['name']} next "
+            f"to it {why} and has loader traits ({', '.join(sideload_traits(dll))}). This "
+            "is DLL side-loading: Windows loads a DLL from the program's own folder first, so "
+            "a trusted, signed program runs the attacker's DLL.", "container",
+        ))
     disguised = [c for c in children if c["report"].file_type
                  and any(m.severity == Severity.HIGH for m in c["report"].file_type.mismatches)]
     if disguised:
@@ -313,6 +325,63 @@ def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
             + ". See the member's section for details.", "container",
         ))
     return findings
+
+
+# capa capabilities of a DLL built to run a payload rather than to provide functions.
+SHELLCODE_CALL = "execute shellcode via indirect call"
+LOADER_SUPPORT = {"allocate or change RWX memory", "contain an embedded PE file"}
+
+
+def _capa_names(report: Report) -> set[str]:
+    r = report.result("capa")
+    if r is None or r.status != Status.OK:
+        return set()
+    return {c["name"] for c in r.data.get("capabilities", [])}
+
+
+def sideload_traits(child: dict[str, Any]) -> list[str]:
+    caps = _capa_names(child["report"])
+    if SHELLCODE_CALL not in caps or not caps & LOADER_SUPPORT:
+        return []
+    return sorted({SHELLCODE_CALL} | (caps & LOADER_SUPPORT))
+
+
+def _signature(report: Report) -> dict[str, Any]:
+    r = report.result("authenticode")
+    return (r.data or {}) if r is not None and r.status == Status.OK else {}
+
+
+def _organization(sig: dict[str, Any]) -> str | None:
+    subjects = [s.get("subject") or "" for s in sig.get("signers", [])]
+    if not subjects or not subjects[0]:
+        return None
+    m = re.search(r"(?:^|,\s*)O=((?:\\,|[^,])+)", subjects[0])
+    return (m.group(1) if m else subjects[0]).replace("\\,", ",").strip().lower()
+
+
+def sideload_pair(children: list[dict[str, Any]]) -> tuple[dict, dict, str] | None:
+    """A validly signed EXE next to a DLL that runs shellcode and does not share its
+    signer. M5 holdout set 2: an ISO held a Dropbox-signed program and a DLL signed by an
+    individual that allocates RWX memory, carries an embedded PE and calls shellcode;
+    each file on its own had nothing above LOW."""
+    def subtype(c: dict[str, Any]) -> str:
+        ft = c["report"].file_type
+        return ft.subtype if ft and ft.kind == "pe" else ""
+
+    exes = [c for c in children if subtype(c) == "exe" and _signature(c["report"]).get("valid")]
+    for dll in (c for c in children if subtype(c) == "dll" and sideload_traits(c)):
+        sig = _signature(dll["report"])
+        for exe in exes:
+            if not sig.get("signed"):
+                why = "is not signed" if sig else "has no checked signature"
+            elif not sig.get("valid"):
+                why = "has a signature that does not verify"
+            elif _organization(sig) != _organization(_signature(exe["report"])):
+                why = "is signed by someone else"
+            else:
+                continue
+            return exe, dll, why
+    return None
 
 
 def build_not_checked(

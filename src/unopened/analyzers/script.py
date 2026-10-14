@@ -13,12 +13,17 @@ from importlib import resources
 from typing import Any
 
 from ..deobfuscate import deobfuscate
+from ..identify import utf16_without_bom
 from ..model import AnalyzerOutput, Finding, Severity
 from . import Context
 
 MAX_TEXT = 5 * 1024 * 1024
 MAX_SHOWN = 4_000
 LONG_LINE = 2_000
+# No hand-written or minified script needs a single line this long: jQuery, minified, is
+# about 90,000 characters. M5 holdout set 2: a RemcosRAT JScript dropper was one line of
+# 3,018,473 characters.
+EXTREME_LINE = 500_000
 _NUM = r"(?:&H[0-9a-fA-F]+|0x[0-9a-fA-F]+|\d+)"
 CHAR_CODE_RUNS = [  # three or more char codes in a row
     re.compile(rf"(?i)(?:\bChrW?\$?\(\s*{_NUM}\s*\)\s*[&+]\s*){{2,}}\bChrW?\$?\(\s*{_NUM}\s*\)"),
@@ -93,6 +98,8 @@ def keyword_findings(prefix: str, hits: list[dict[str, Any]], where: str) -> lis
 def read_text(data: bytes) -> str:
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
         return data.decode("utf-16", errors="replace")
+    if codec := utf16_without_bom(data[:8192]):
+        return data[: len(data) // 2 * 2].decode(codec, errors="replace")
     return data.decode("utf-8", errors="replace").lstrip("﻿")
 
 
@@ -146,7 +153,14 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
             f"Uses {', '.join(what)} to hide its text. The decoded form is shown in the "
             "Script section and was searched for keywords and indicators.",
         ))
-    if longest > LONG_LINE:
+    if longest > EXTREME_LINE:
+        out.findings.append(Finding(
+            "script.long_line", Severity.MEDIUM,
+            f"Extremely long line ({longest:,} characters)",
+            f"No ordinary script, even a minified one, has a line over {EXTREME_LINE:,} "
+            "characters. Lines like this hold an encoded payload or packed code.",
+        ))
+    elif longest > LONG_LINE:
         out.findings.append(Finding(
             "script.long_line", Severity.LOW, f"Very long line ({longest:,} characters)",
             "Long single lines usually hold encoded data or packed code.",

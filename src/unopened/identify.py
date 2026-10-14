@@ -257,6 +257,24 @@ def _identify_zip(path: Path) -> FileType:
     )
 
 
+def utf16_without_bom(sample: bytes) -> str | None:
+    """The codec of UTF-16 text saved without a byte-order mark, or None.
+
+    Mostly-ASCII UTF-16 has a zero in nearly every odd byte (little-endian) or every even
+    byte (big-endian), and almost none in the other. M5 holdout set 2: a GuLoader VBScript
+    saved this way was reported as unrecognized binary data and never analyzed as a
+    script."""
+    if len(sample) < 16:
+        return None
+    even, odd = sample[0::2], sample[1::2]
+    zeros_even, zeros_odd = even.count(0) / len(even), odd.count(0) / len(odd)
+    if zeros_odd >= 0.6 and zeros_even <= 0.05:
+        return "utf-16-le"
+    if zeros_even >= 0.6 and zeros_odd <= 0.05:
+        return "utf-16-be"
+    return None
+
+
 def _decode_text(head: bytes) -> str | None:
     sample = head[:8192]
     if sample.startswith((b"\xff\xfe", b"\xfe\xff")):
@@ -265,7 +283,12 @@ def _decode_text(head: bytes) -> str | None:
         except UnicodeDecodeError:
             return sample[: len(sample) // 2 * 2].decode("utf-16", errors="replace")
     if b"\x00" in sample:
-        return None
+        codec = utf16_without_bom(sample)
+        if codec is None:
+            return None
+        text = sample[: len(sample) // 2 * 2].decode(codec, errors="replace")
+        printable = sum(1 for c in text if c.isprintable() or c in "\r\n\t")
+        return text if printable / max(len(text), 1) >= 0.95 else None
     text = sample.decode("utf-8", errors="replace").lstrip("﻿")
     printable = sum(1 for c in text if c.isprintable() or c in "\r\n\t")
     if printable / max(len(text), 1) < 0.95:

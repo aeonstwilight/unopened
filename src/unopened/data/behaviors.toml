@@ -9,7 +9,9 @@
 # Signals:
 #   capa:NAME        a capa capability with exactly this name
 #   capa~TEXT        a capa capability whose name contains TEXT (case-insensitive)
+#   capa/REGEX       a capa capability whose name matches REGEX (case-insensitive)
 #   finding:ID       a finding with this ID from any analyzer
+#   finding:ID@LEVEL that finding at LEVEL (info, low, medium, high) or above
 #
 # `all` is a list of groups; each group is satisfied when any one of its signals is
 # present. `unsigned = true` also requires a positive "not digitally signed" result; if the
@@ -140,3 +142,33 @@ severity = "high"
 description = "Uses a known technique to gain administrator rights without the UAC prompt."
 unsigned = true
 all = [["capa~bypass UAC"]]
+
+# Added after holdout set 2 (M5). Compiled loaders whose single signals were each LOW or
+# MEDIUM, and which came back "no findings".
+
+[dotnet_crypter]
+title = ".NET program that loads hidden code from itself"
+severity = "high"
+description = "A .NET program whose code section looks encrypted or compressed, and which loads and invokes a .NET assembly at run time: the usual shape of a crypter that decrypts its real payload from a resource and runs it in memory. Normal .NET code is far less random."
+unsigned = true
+all = [
+    ["finding:pe.dotnet"],
+    ["finding:pe.high_entropy_section@medium"],
+    ["capa:load .NET assembly", "capa:invoke .NET assembly method"],
+]
+
+[api_hashing]
+title = "Finds Windows functions by hash"
+severity = "high"
+description = "Looks up Windows functions by comparing hashes of their names instead of naming them, so the functions it uses appear nowhere in the file. Shellcode, loaders and attack frameworks do this; ordinary programs do not need to."
+unsigned = true
+all = [["capa/^resolve function by .*hash"]]
+
+[com_script_with_payload_line]
+title = "Script with a huge encoded line that reaches Windows"
+severity = "high"
+description = "Creates Windows COM objects, runs commands or runs text as code (the ways JScript and VBScript reach the shell, the file system and the network), and carries a single line far longer than any normal script, where the real payload is packed."
+all = [
+    ["finding:script.js.activex", "finding:script.vbs.shell", "finding:script.vbs.execute"],
+    ["finding:script.long_line@medium"],
+]
