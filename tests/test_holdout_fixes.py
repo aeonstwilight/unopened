@@ -185,3 +185,71 @@ def test_signed_program_with_shellcode_dll_is_side_loading(dll_sig, why):
 ])
 def test_not_side_loading(children):
     assert "container.sideload" not in {f.id for f in pipeline.container_findings(children)}
+
+
+def _junk_comments(n: int, rng) -> str:
+    words = ["Set-Item", "$value = 3", "Get-Content", "New-Object", "Write-Host",
+             "Invoke-Thing", "param(", "[System.IO.File]"]
+    return "".join(f"' {rng.choice(words)} {rng.choice(words)} {i}\r\n" for i in range(n))
+
+
+def test_vbscript_that_scores_as_powershell_keeps_its_name(make_file):
+    # Run 1: two GuLoader VBScripts, padded with comment lines full of PowerShell-looking
+    # words, were analyzed as PowerShell. Their only finding was the name mismatch.
+    import random
+    rng = random.Random(5)
+    code = ('Dim k, s\r\nk = "lehS.tpircSW"\r\n'
+            'Set s = CreateObject(StrReverse(k))\r\n'
+            'Execute Mid("xxWScript.Echo 1", 3)\r\n')
+    r = triage(make_file("doc.vbs", (_junk_comments(300, rng) + code).encode()))
+    assert (r.file_type.kind, r.file_type.subtype) == ("script", "vbscript")
+    assert not r.file_type.mismatches
+    found = ids(r)
+    assert "script.vbs.execute" in found and "script.vbs.string_building" in found
+    assert found["behavior.decoded_execution"].value == "high"
+
+
+def test_real_powershell_named_ps1_is_unchanged(make_file):
+    r = triage(make_file("a.ps1", b"$x = Get-Date\nWrite-Host $x\n"))
+    assert r.file_type.subtype == "powershell"
+
+
+def test_powershell_named_vbs_without_any_vbscript_stays_powershell(make_file):
+    # No VBScript signs at all: the content wins and the name mismatch is reported.
+    r = triage(make_file("a.vbs", b"$x = Get-Date\nWrite-Host $x\nSet-Item a b\n"))
+    assert r.file_type.subtype == "powershell"
+    assert r.file_type.mismatches
+
+
+def test_js_padded_with_zero_width_characters_is_text(make_file):
+    # Run 1: an 8.6 MB RemcosRAT JScript with 17% non-ASCII bytes came back as
+    # "Unrecognized binary data". Rebuilt with zero-width and private-use padding.
+    pad = "\u200b\u200d\ue000\u2060" * 3000
+    js = f'var p = "{pad}";\nvar o = new ActiveXObject("WScript.Shell");\n'
+    r = triage(make_file("PO-2.js", js.encode("utf-8")))
+    assert (r.file_type.kind, r.file_type.subtype) == ("script", "javascript")
+    assert "script.js.activex" in ids(r)
+
+
+def test_obfuscated_batch_that_reads_itself(make_file):
+    # Run 1: an 880 KB AsyncRAT batch file with 783 %var:~n,m% substrings and a reference
+    # to its own path had one LOW finding. Rebuilt: every command spelled from an alphabet
+    # variable; the hidden command names the script's own file.
+    alphabet = "abcdefghijklmnopqrstuvwxyz .-"
+    def spell(word):
+        return "".join(f"%k:~{alphabet.index(c)},1%" for c in word)
+    hidden = spell("powershell -w hidden -c get-content ") + "%~f0"
+    lines = [f'set "k={alphabet}"'] + [f"{spell('echo')} {spell('ready')}"] * 6 + [hidden]
+    r = triage(make_file("run.bat", ("\r\n".join(lines) + "\r\n").encode()))
+    found = ids(r)
+    assert "script.obfuscated" in found
+    assert "script.bat.powershell" in found  # only visible after expansion
+    assert found["behavior.obfuscated_self_reading_batch"].value == "high"
+
+
+def test_batch_with_a_few_date_substrings_is_not_obfuscated(make_file):
+    bat = ('@echo off\r\nset "d=%date:~10,4%%date:~4,2%%date:~7,2%"\r\n'
+           'copy "%~f0" "C:\\backup\\%d%.bat"\r\n')
+    r = triage(make_file("backup.bat", bat.encode()))
+    assert "script.obfuscated" not in ids(r)
+    assert "behavior.obfuscated_self_reading_batch" not in ids(r)

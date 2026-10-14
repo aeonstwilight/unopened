@@ -84,6 +84,8 @@ def identify(path: Path, name: str | None = None) -> FileType:
     file_type = _identify_content(path, head)
     if file_type.kind == "text":
         file_type = _script_by_name(name or path.name) or file_type
+    elif file_type.kind == "script":
+        file_type = _script_language_by_name(name or path.name, file_type)
     file_type.mismatches = check_name(name or path.name, file_type)
     return file_type
 
@@ -106,6 +108,27 @@ def _script_by_name(name: str) -> FileType | None:
                 details={"identified_by": "extension"},
             )
     return None
+
+
+def _script_language_by_name(name: str, file_type: FileType) -> FileType:
+    """Content heuristics found one script language and the name says another. When the
+    content also shows signs of the named language, the name decides: it is what Windows
+    will run the file with. M5 holdout set 2: two GuLoader VBScripts padded with junk
+    scored higher as PowerShell, were analyzed with the PowerShell rules and came back
+    "no findings"."""
+    named = _script_by_name(name)
+    if named is None or named.subtype == file_type.subtype:
+        return file_type
+    scores = (file_type.details or {}).get("heuristic_scores", {})
+    if scores.get(named.subtype, 0) < 1:
+        return file_type
+    return FileType(
+        "script",
+        f"{SCRIPT_NAMES[named.subtype]} script (identified by its .{name.rsplit('.', 1)[-1]} "
+        f"name; the content also scored as {SCRIPT_NAMES[file_type.subtype]})",
+        subtype=named.subtype,
+        details={"identified_by": "extension", "heuristic_scores": scores},
+    )
 
 
 def _identify_content(path: Path, head: bytes) -> FileType:
@@ -287,13 +310,21 @@ def _decode_text(head: bytes) -> str | None:
         if codec is None:
             return None
         text = sample[: len(sample) // 2 * 2].decode(codec, errors="replace")
-        printable = sum(1 for c in text if c.isprintable() or c in "\r\n\t")
-        return text if printable / max(len(text), 1) >= 0.95 else None
+        return text if _text_ratio(text) >= 0.95 else None
     text = sample.decode("utf-8", errors="replace").lstrip("﻿")
-    printable = sum(1 for c in text if c.isprintable() or c in "\r\n\t")
-    if printable / max(len(text), 1) < 0.95:
+    if _text_ratio(text) < 0.95:
         return None
     return text
+
+
+def _text_ratio(text: str) -> float:
+    """Share of characters that are not control codes. Format characters (zero-width
+    spaces and joiners) and private-use characters are text: str.isprintable() rejects
+    them, and M5 holdout set 2 had an 8.6 MB RemcosRAT JScript padded with them that was
+    reported as unrecognized binary data."""
+    controls = sum(1 for c in text
+                   if unicodedata.category(c) == "Cc" and c not in "\r\n\t")
+    return 1 - controls / max(len(text), 1)
 
 
 SCRIPT_HINTS: dict[str, list[str]] = {

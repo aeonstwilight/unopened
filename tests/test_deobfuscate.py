@@ -73,3 +73,20 @@ def test_execution_policy_is_not_encoded_command():
 def test_undecodable_base64():
     assert decode_base64_text("!!!notbase64!!!") is None
     assert decode_base64_text(base64.b64encode(bytes(range(256))).decode()) is None  # binary
+
+
+def test_batch_variable_expansion():
+    from unopened.deobfuscate import deobfuscate
+    text = 'set "a=powershell"\r\nset b=calc\r\n%a:~0,5%%a:~5% -c %b%\r\n%a:~-5% %a:~0,-5%\r\n'
+    r = deobfuscate(text, language="batch")
+    assert "powershell -c calc" in r.text
+    assert "shell power" in r.text
+    assert "batch variables" in r.techniques()
+    # Other languages: % is not a variable sigil.
+    assert "batch variables" not in deobfuscate(text).techniques()
+
+
+def test_batch_variable_set_twice_is_not_expanded():
+    from unopened.deobfuscate import deobfuscate
+    r = deobfuscate("set a=one\r\nset a=two\r\necho %a%\r\n", language="batch")
+    assert "%a%" in r.text

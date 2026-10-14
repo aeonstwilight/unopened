@@ -73,6 +73,10 @@ CASES = {
     "api_hashing": (["resolve function by Brute Ratel Badger hash"], [], Severity.HIGH),
     "com_script_with_payload_line": ([], ["script.js.activex", "script.long_line@medium"],
                                      Severity.HIGH),
+    "decoded_execution": ([], ["script.vbs.execute", "script.vbs.string_building"],
+                          Severity.HIGH),
+    "obfuscated_self_reading_batch": ([], ["script.obfuscated", "script.bat.self_read"],
+                                      Severity.HIGH),
 }
 
 

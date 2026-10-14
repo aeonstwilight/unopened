@@ -172,3 +172,18 @@ all = [
     ["finding:script.js.activex", "finding:script.vbs.shell", "finding:script.vbs.execute"],
     ["finding:script.long_line@medium"],
 ]
+
+[decoded_execution]
+title = "Runs code it assembles at run time"
+severity = "high"
+description = "Builds text from pieces (Mid, StrReverse, Chr) and runs text as code with Execute or Eval, so the code that runs never appears in the file. Admin scripts have no need to hide what they run."
+all = [
+    ["finding:script.vbs.execute"],
+    ["finding:script.vbs.string_building", "finding:script.obfuscated"],
+]
+
+[obfuscated_self_reading_batch]
+title = "Obfuscated batch file that reads itself"
+severity = "high"
+description = "Spells its commands through variable substrings or encodings and refers to its own file, the shape of a batch dropper that unpacks a payload appended to itself."
+all = [["finding:script.obfuscated"], ["finding:script.bat.self_read"]]

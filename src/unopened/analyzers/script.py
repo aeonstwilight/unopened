@@ -50,6 +50,11 @@ def _spells_something(run: str) -> bool:
 LITERAL = re.compile(r"""'[^'\r\n]*'|"[^"\r\n]*\"""")
 LITERAL_CHAIN = re.compile(
     r"""(?:(?:'[^'\r\n]*'|"[^"\r\n]*")\s*[+&]\s*){2,}(?:'[^'\r\n]*'|"[^"\r\n]*")""")
+# cmd.exe substring expansion, %name:~5,1%: a date or path parser uses a handful; batch
+# obfuscators spell every command one character at a time. M5 holdout set 2: an AsyncRAT
+# batch file had 783.
+BAT_SLICE = re.compile(r"%[^\s%:=]+:~-?\d+(?:,-?\d+)?%")
+BAT_SLICES_MIN = 50
 CHAIN_MIN = 4   # literals joined back to back
 CHAINS_MIN = 3  # this many such chains is a pattern, not one formatting line
 LONG_CHAIN = 8  # or one chain this long
@@ -112,7 +117,7 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
         out.not_checked.append(f"Script text beyond the first {MAX_TEXT:,} bytes")
         raw = raw[:MAX_TEXT]
     text = read_text(raw)
-    result = deobfuscate(text)
+    result = deobfuscate(text, language=language)
     if result.truncated:
         out.not_checked.append("Deobfuscated output beyond the size cap")
 
@@ -142,10 +147,14 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
     chains = [len(LITERAL.findall(m.group(0))) for m in LITERAL_CHAIN.finditer(text)]
     heavy_concat = (sum(1 for n in chains if n >= CHAIN_MIN) >= CHAINS_MIN
                     or any(n >= LONG_CHAIN for n in chains))
+    slices = len(BAT_SLICE.findall(text)) if language == "batch" else 0
     encoded = (techniques & {"base64"}) | ({"char codes"} if char_runs else set())
+    if slices >= BAT_SLICES_MIN:
+        encoded.add("variable substrings")
     out.data["obfuscation_shape"] = {"char_code_runs": char_runs,
                                      "literal_chains": sum(1 for n in chains if n >= CHAIN_MIN),
-                                     "longest_chain": max(chains, default=0)}
+                                     "longest_chain": max(chains, default=0),
+                                     "batch_substrings": slices}
     if encoded or heavy_concat:
         what = sorted(encoded) + (["heavy string concatenation"] if heavy_concat else [])
         out.findings.append(Finding(
