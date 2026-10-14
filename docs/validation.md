@@ -278,3 +278,15 @@ was resumed and completed.
   smaller of its own limit and the time left, and analyzers or members still pending when
   it runs out are listed under Not checked, with the verdict's confidence lowered to low.
   Regression tests: `tests/test_time_budget.py`.
+
+## What remains
+
+- **Holdout rerun against the corpus 2 fixes.** Those fixes judge scripts and macros more
+  strictly (obfuscation by shape, downloading only with a web request, malicious macros
+  only with run or fetch functions). The holdout's scripts and Office files should be run
+  again to confirm no detection was lost.
+- **A fresh holdout set.** The 30 samples above shaped the fixes, so they no longer
+  measure detection on unseen malware. A new set, picked the same way, would.
+- **Known limitations, documented rather than fixed:** link-only PDF lures, MSI contents,
+  macro workbooks without auto-run that use suspicious functions, and large scripts whose
+  only signal is a single `eval`.
