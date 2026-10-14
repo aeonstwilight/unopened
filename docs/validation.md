@@ -142,6 +142,24 @@ in run 3 below: no new false positives.
 Runtime: median 7.2 s per file, slowest 908 s (an ISO stopped by the 900-second file
 budget, its first real use), 50 minutes in total. capa timed out on 4 files.
 
+## Results: holdout set 2 (MalwareBazaar)
+
+A fresh set, because the first holdout shaped the fixes above and no longer measures
+unseen malware. Picked the same way on October 14: the newest samples per file type.
+Rules frozen at commit `cd45981`, after every fix in this document. Hashes and tags are
+in `validation/holdout2-malwarebazaar.csv`. Two PDFs were also in set 1 (few new PDFs had
+been uploaded in between); they are marked in the notes. One zip contained a second
+sample that is also listed, so 30 downloads gave 31 scored samples.
+
+**Run 1: expected verdict met on 8 of 31.** 7 malicious, 1 suspicious, 1 could not
+analyze (a password-protected PDF, tag `pass`), 22 no findings. Without the two repeated
+PDFs: 8 of 29.
+
+That is lower than set 1's first run (11 of 30), on a different mix: set 2 has more
+compiled programs and loaders, and the misses are mostly EXEs and DLLs. Whether the
+corpus 2 fixes cost any detection is checked separately below, by running this same set
+on the rules as they stood before those fixes.
+
 ## Results: benign corpus
 
 201 files: the Sysinternals Suite (Microsoft-signed admin tools that read process memory,
