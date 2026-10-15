@@ -74,6 +74,24 @@ unopened triage suspicious.bin --format both --out reports/ # Markdown and JSON
 For capa and YARA, point the tool at your own rules (see [Rules](#rules)). Run it on
 real malware only inside an isolated analysis VM.
 
+## How this was built
+
+I built unopened with Claude Code, and I want to be upfront about the split. Claude wrote
+the code. I'm a security analyst, not a software engineer: I can read and get Python
+working, but the implementation here is Claude's, not mine.
+
+What was mine is everything around the code: the problem it solves, what an analyst
+actually needs from a triage report, the scope, and the hard rules it is not allowed to
+break (never execute a sample, defang every indicator, no network unless asked, bounded
+extraction, and never let a skipped check look like a clean result). Those rules and the
+milestone plan are in [CLAUDE.md](CLAUDE.md), the brief every piece of work started
+from. I also designed and ran the validation: building the benign corpora, picking the
+holdout sets and freezing the rules before each run, running every sample inside an
+isolated VM, reviewing each miss and false positive, and deciding what to fix, what to
+document as a limitation, and what to take back out when it flagged legitimate software.
+
+If something in the code looks odd, that is a fair catch, and an issue is welcome.
+
 ## Safety guarantees
 
 - **Static only.** No analyzer runs the sample or loads it as code, macros or scripts.
