@@ -206,7 +206,9 @@ def test_vbscript_that_scores_as_powershell_keeps_its_name(make_file):
     assert not r.file_type.mismatches
     found = ids(r)
     assert "script.vbs.execute" in found and "script.vbs.string_building" in found
-    assert found["behavior.decoded_execution"].value == "high"
+    # Known limit: no pattern turns this into a verdict. Microsoft's slmgr.vbs and
+    # winrm.vbs run Execute/Eval on built strings too (M5 corpus 2 run 4).
+    assert "behavior.decoded_execution" not in found
 
 
 def test_real_powershell_named_ps1_is_unchanged(make_file):

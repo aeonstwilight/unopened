@@ -147,11 +147,10 @@ when all parts are present, citing the exact evidence.
 | .NET program that loads hidden code from itself | unsigned .NET + high-entropy code section (MEDIUM) + loads or invokes a .NET assembly | HIGH |
 | Finds Windows functions by hash | unsigned + capa: resolve function by ... hash | HIGH |
 | Script with a huge encoded line that reaches Windows | COM objects, commands or Execute/Eval + a line over 500,000 characters | HIGH |
-| Runs code it assembles at run time | VBScript Execute/Eval + builds strings with Mid, StrReverse or Chr (or is obfuscated) | HIGH |
 | Obfuscated batch file that reads itself | batch obfuscated (encodings or 50+ `%var:~n,m%` substrings) + refers to its own file (`%~f0`) | HIGH |
 
 The five from "Process-injection imports" to "Bypasses User Account Control" were added
-after holdout set 1, and the last five after holdout set 2 (see
+after holdout set 1, and the last four after holdout set 2 (see
 [docs/validation.md](docs/validation.md)), from combinations seen on real samples the
 earlier rules had not been written against.
 

@@ -173,14 +173,12 @@ all = [
     ["finding:script.long_line@medium"],
 ]
 
-[decoded_execution]
-title = "Runs code it assembles at run time"
-severity = "high"
-description = "Builds text from pieces (Mid, StrReverse, Chr) and runs text as code with Execute or Eval, so the code that runs never appears in the file. Admin scripts have no need to hide what they run."
-all = [
-    ["finding:script.vbs.execute"],
-    ["finding:script.vbs.string_building", "finding:script.obfuscated"],
-]
+# A "decoded_execution" pattern (VBScript Execute/Eval plus Mid, StrReverse or Chr) was
+# tried after holdout set 2 and removed: Microsoft's slmgr.vbs and winrm.vbs run Execute
+# and Eval on variables and build strings the same way. Measured on the two GuLoader
+# samples and those two scripts, the Execute form and the string-building counts were the
+# same; only the share of comment lines differed, and four files are not enough to set a
+# threshold on that.
 
 [obfuscated_self_reading_batch]
 title = "Obfuscated batch file that reads itself"
