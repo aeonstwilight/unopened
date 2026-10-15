@@ -321,7 +321,7 @@ It also found two parser problems that a clean verdict had hidden:
 | 2. After the fixes above | 1 | 1 | **1.4%** (2 of 146) |
 | 3. After two more | 0 | 1 | **0.7%** (1 of 146) |
 | 4. After the holdout set 2 fixes | 0 | 3 | **2.1%** (3 of 146) |
-| 5. After removing the VBScript pattern | pending | pending | pending |
+| 5. After removing the VBScript pattern | 0 | 1 | **0.7%** (1 of 146) |
 
 **Run 2** cleared five of the seven and both parser problems. `slmgr.vbs` was still
 malicious, for two reasons found by printing its matching lines: it uses `ADODB.Stream`
@@ -340,7 +340,7 @@ malicious fixtures, and a holdout rerun against them is listed under what remain
 
 **Run 4, after the holdout set 2 fixes: 3 suspicious.** The macro workbook as before, and
 `slmgr.vbs` and `winrm.vbs` through the VBScript pattern described under holdout set 2,
-which was then removed. **Run 5** is in progress; its result will be recorded here.
+which was then removed. **Run 5, after removing it (commit `1ed7743`): 0 malicious, 1 suspicious (0.7%)**, the macro workbook that runs on open, back to the run 3 result. capa timed out on 3 files.
 
 The VM stalled twice during run 3 and killed the run while it was writing a row, which
 exposed a harness bug: `--resume` failed on the cut-off line. Fixed, with a test; the run
