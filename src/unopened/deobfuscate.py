@@ -6,6 +6,8 @@ string literals:
 - character codes: [char]72, String.fromCharCode(72,105), Chr(72)/ChrW(&H48), and
   numeric arrays next to a char conversion
 - string concatenation: 'a' + 'b', "a" & "b"
+- batch variables (batch scripts only): %name%, %name:~3,1% and %name:~-2% replaced
+  with the value of a literal `set name=value` line, as cmd.exe would expand them
 Passes repeat until nothing changes, up to max_rounds, and output is capped.
 """
 
@@ -175,15 +177,59 @@ def _pass_concat(text: str) -> tuple[str, int]:
     return text, count
 
 
+BAT_SET = re.compile(r'(?im)^[ \t@]*set[ \t]+(?!/[ap]\b)"?([^\s="%!]+)=([^\r\n"%]*)"?[ \t]*\r?$')
+BAT_REF = re.compile(r"%([^\s%:=]+)(?::~(-?\d+)(?:,(-?\d+))?)?%")
+
+
+def _slice(value: str, start: str | None, length: str | None) -> str:
+    out = value[int(start):] if start else value
+    if length is None:
+        return out
+    n = int(length)
+    return out[:n] if n >= 0 else out[:n] if -n <= len(out) else ""
+
+
+def _pass_batch_vars(text: str) -> tuple[str, int]:
+    """Expand references to variables set once to a literal value. A variable set to two
+    different values is left alone: which one applies depends on the order the script
+    runs in."""
+    values: dict[str, str | None] = {}
+    for m in BAT_SET.finditer(text):
+        key = m.group(1).lower()
+        values[key] = m.group(2) if values.get(key, m.group(2)) == m.group(2) else None
+    if not values:
+        return text, 0
+    count = 0
+
+    def expand(m: re.Match[str]) -> str:
+        nonlocal count
+        value = values.get(m.group(1).lower())
+        if value is None:
+            return m.group(0)
+        count += 1
+        return _slice(value, m.group(2), m.group(3))
+
+    return BAT_REF.sub(expand, text), count
+
+
 PASSES = [("base64", _pass_base64), ("char codes", _pass_charcodes),
           ("string concatenation", _pass_concat)]
+BATCH_PASSES = [("batch variables", _pass_batch_vars)] + PASSES
 
 
-def deobfuscate(text: str, max_rounds: int = MAX_ROUNDS, max_chars: int = MAX_CHARS) -> Result:
-    result = Result(text[:max_chars], truncated=len(text) > max_chars)
+def deobfuscate(text: str, max_rounds: int = MAX_ROUNDS, max_chars: int = MAX_CHARS,
+                language: str | None = None) -> Result:
+    if len(text) > max_chars:
+        # Head and tail: padding usually sits before the payload (M5 holdout: scripts of
+        # several MB led by junk), so the end of the file matters as much as the start.
+        half = max_chars // 2
+        window = text[:half] + "\n" + text[-half:]
+    else:
+        window = text
+    result = Result(window, truncated=len(text) > max_chars)
     for _ in range(max_rounds):
         changed = False
-        for name, func in PASSES:
+        for name, func in (BATCH_PASSES if language == "batch" else PASSES):
             new, count = func(result.text)
             if count and new != result.text:
                 changed = True

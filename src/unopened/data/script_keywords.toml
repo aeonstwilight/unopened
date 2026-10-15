@@ -89,7 +89,9 @@ tags = ["com"]
 
 [[javascript]]
 id = "js.shell"
-pattern = '(?i)WScript\.Shell|Shell\.Application|\.ShellExecute\b|\.Run\s*\(|\.Exec\s*\('
+# Case matters: JavaScript is case-sensitive, so WSH's .Run( and .Exec( are capitalised,
+# while RegExp.exec( (lower case) is in every web library. M5 corpus 2: jQuery matched.
+pattern = '(?i:WScript\.Shell|Shell\.Application)|\.ShellExecute\b|\.Run\s*\(|\.Exec\s*\('
 severity = "medium"
 title = "Runs programs or commands"
 tags = ["execute"]
@@ -119,14 +121,27 @@ tags = ["execute"]
 
 [[vbscript]]
 id = "vbs.download"
-pattern = '(?i)MSXML2\.(?:Server)?XMLHTTP|WinHttp\.WinHttpRequest|Microsoft\.XMLHTTP|ADODB\.Stream'
+pattern = '(?i)MSXML2\.(?:Server)?XMLHTTP|WinHttp\.WinHttpRequest|Microsoft\.XMLHTTP'
 severity = "medium"
-title = "Downloads or writes files (XMLHTTP / ADODB.Stream)"
+title = "Downloads from the internet (XMLHTTP / WinHttp)"
 tags = ["download"]
+
+# ADODB.Stream writes binary files: the second half of a classic downloader, but it fetches
+# nothing on its own. M5 corpus 2: slmgr.vbs uses it for files and was called a downloader.
+[[vbscript]]
+id = "vbs.binary_write"
+pattern = '(?i)ADODB\.Stream'
+severity = "low"
+title = "Writes binary files (ADODB.Stream)"
+tags = ["file_write"]
 
 [[vbscript]]
 id = "vbs.execute"
-pattern = '(?i)\b(?:Execute|ExecuteGlobal|Eval)\b\s*[\("]'
+# Statement form (Execute expr) as well as the call form. M5 holdout set 2: GuLoader runs
+# Execute on a string built with Mid, with no parenthesis or quote after the keyword.
+# A method call is not: RegExp.Execute(text) runs a regular expression (M5 corpus 2:
+# winrm.vbs calls it five times).
+pattern = '(?im)(?<![.\w])(?<!\.\s)(?:Execute|ExecuteGlobal|Eval)\b\s*[\("]|(?:^|:|\bThen)[ \t]*(?:Execute|ExecuteGlobal)[ \t]+[^\s=]'
 severity = "medium"
 title = "Runs text as code (Execute/Eval)"
 tags = ["execute"]
@@ -137,6 +152,15 @@ pattern = '(?i)\bpowershell(?:\.exe)?\b'
 severity = "medium"
 title = "Launches PowerShell"
 tags = ["execute"]
+
+# Building strings piece by piece. Common on its own; with Execute it is code that only
+# exists once the script runs. M5 holdout set 2: GuLoader VBScripts.
+[[vbscript]]
+id = "vbs.string_building"
+pattern = '(?i)\bMid\$?\s*\(|\bStrReverse\s*\(|\bChrW?\$?\s*\('
+severity = "low"
+title = "Builds strings from pieces (Mid, StrReverse, Chr)"
+tags = []
 
 # Batch --------------------------------------------------------------------------------
 
@@ -202,3 +226,13 @@ pattern = '(?i)\battrib(?:\.exe)?\s[^\n]*\+h\b'
 severity = "low"
 title = "Hides files"
 tags = ["stealth"]
+
+# The script names its own file: obfuscated batch droppers read a payload appended to
+# themselves. M5 holdout set 2: AsyncRAT. %~dp0 (the script's folder) is common and not
+# matched.
+[[batch]]
+id = "bat.self_read"
+pattern = '(?i)%~f0\b|%~dpnx0\b'
+severity = "low"
+title = "Refers to its own file"
+tags = []

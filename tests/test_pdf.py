@@ -110,3 +110,41 @@ def test_jbig2_decoder_is_disabled(monkeypatch, make_file, arch_fx, tmp_path):
     path = make_file("p.pdf", arch_fx.pdf_plain())
     runner.run_analyzer(analyzer, Context(path, identify(path), Options(), 0), isolate=False)
     assert "jbig2dec_binary" in seen and seen["jbig2dec_binary"] is None
+
+
+def test_odd_ef_entry_neither_crashes_nor_hides_the_rest(make_file, arch_fx, tmp_path):
+    # M5 benign corpus 2: IRS fill-in forms hold a dictionary whose /EF is an array. That
+    # raised AttributeError and ended the whole walk, so all 20 forms were "partial" and
+    # their JavaScript went unseen. The odd entry is placed so it is visited first.
+    js = b"app.alert('unopened fixture');"
+    data = arch_fx.build_pdf([
+        b"<< /Type /Catalog /Pages 2 0 R /OpenAction 4 0 R /Odd << /EF [1 0 R] >> >>",
+        *arch_fx._pages(),
+        b"<< /Type /Action /S /JavaScript /JS 5 0 R >>",
+        arch_fx._stream(js),
+    ])
+    r = analyze(make_file("form.pdf", data), tmp_path)
+    assert r.status == Status.OK, r.errors
+    assert len(r.data["javascript"]) == 1
+
+
+def test_one_failing_object_is_reported_and_the_walk_continues(make_file, arch_fx, tmp_path,
+                                                                monkeypatch):
+    from unopened.analyzers import pdf
+    real = pdf._inspect
+
+    def flaky(d, *a):
+        if "/Odd" in d:
+            raise ValueError("synthetic failure")
+        return real(d, *a)
+
+    monkeypatch.setattr(pdf, "_inspect", flaky)
+    data = arch_fx.build_pdf([
+        b"<< /Type /Catalog /Pages 2 0 R /OpenAction 4 0 R /X << /Odd 1 >> >>",
+        *arch_fx._pages(),
+        b"<< /Type /Action /S /JavaScript /JS 5 0 R >>",
+        arch_fx._stream(b"app.alert('x');"),
+    ])
+    r = analyze(make_file("f.pdf", data), tmp_path)
+    assert r.status == Status.PARTIAL and any("synthetic failure" in e for e in r.errors)
+    assert len(r.data["javascript"]) == 1

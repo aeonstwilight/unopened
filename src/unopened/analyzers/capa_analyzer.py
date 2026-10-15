@@ -114,7 +114,10 @@ def _findings(found: list[dict[str, Any]], limitations: list[dict[str, str]],
     for lim in limitations:
         out.findings.append(Finding(
             "capa.limited",
-            Severity.MEDIUM, "capa results are limited for this file",
+            # INFO: this says what could not be seen, not what the file does. It is listed
+            # under Not checked; as MEDIUM it stacked toward "suspicious" on every .NET
+            # assembly and installer (M5 corpus 2).
+            Severity.INFO, "capa results are limited for this file",
             f"{lim['description'] or lim['rule']}. Packed, installer or otherwise wrapped "
             "files hide their real code from static analysis, so few capabilities show.",
         ))

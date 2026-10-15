@@ -11,7 +11,7 @@ Verdicts, most to least severe: **malicious**, **suspicious**, **could not analy
 | V-MAL-01 | malicious | high | A configured YARA rule with severity high (or score 75 and above) matched. |
 | V-REP-01 | malicious | high | MalwareBazaar (a database of known malware samples) has this exact hash. Needs --reputation. |
 | V-REP-02 | malicious | high | VirusTotal reports 5 or more engines detecting this hash as malicious. Needs --reputation and VT_API_KEY. |
-| V-MAL-02 | malicious | high | Office macros run automatically on open and use functions that run programs, download files or create objects. |
+| V-MAL-02 | malicious | high | Office macros run automatically on open and use functions that run programs, download files or call Windows directly. |
 | V-MAL-03 | malicious | high | A shortcut launches a scripting or download tool (LOLBin) with an encoded, hidden, padded or URL-bearing command, or carries an appended program. |
 | V-MAL-04 | malicious | high | A document contains a DDE field that can run a command. |
 | V-MAL-05 | malicious | high | A document loads a remote template or object when opened (template injection). |

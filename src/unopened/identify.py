@@ -82,8 +82,53 @@ def identify(path: Path, name: str | None = None) -> FileType:
     with path.open("rb") as f:
         head = f.read(HEAD_SIZE)
     file_type = _identify_content(path, head)
+    if file_type.kind == "text":
+        file_type = _script_by_name(name or path.name) or file_type
+    elif file_type.kind == "script":
+        file_type = _script_language_by_name(name or path.name, file_type)
     file_type.mismatches = check_name(name or path.name, file_type)
     return file_type
+
+
+def _script_by_name(name: str) -> FileType | None:
+    """Text whose content heuristics found no language but whose name says script.
+
+    M5 holdout: three real scripts were padded with junk so the heuristics, which read only
+    the start of the file, scored nothing, and the script analyzer never ran. Text content
+    cannot contradict a script extension, so the name decides."""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    for key, exts in EXPECTED_EXTENSIONS.items():
+        if key.startswith("script:") and ext in exts:
+            lang = key.split(":", 1)[1]
+            return FileType(
+                "script",
+                f"{SCRIPT_NAMES[lang]} script (identified by its .{ext} name; the content "
+                "heuristics were inconclusive)",
+                subtype=lang,
+                details={"identified_by": "extension"},
+            )
+    return None
+
+
+def _script_language_by_name(name: str, file_type: FileType) -> FileType:
+    """Content heuristics found one script language and the name says another. When the
+    content also shows signs of the named language, the name decides: it is what Windows
+    will run the file with. M5 holdout set 2: two GuLoader VBScripts padded with junk
+    scored higher as PowerShell, were analyzed with the PowerShell rules and came back
+    "no findings"."""
+    named = _script_by_name(name)
+    if named is None or named.subtype == file_type.subtype:
+        return file_type
+    scores = (file_type.details or {}).get("heuristic_scores", {})
+    if scores.get(named.subtype, 0) < 1:
+        return file_type
+    return FileType(
+        "script",
+        f"{SCRIPT_NAMES[named.subtype]} script (identified by its .{name.rsplit('.', 1)[-1]} "
+        f"name; the content also scored as {SCRIPT_NAMES[file_type.subtype]})",
+        subtype=named.subtype,
+        details={"identified_by": "extension", "heuristic_scores": scores},
+    )
 
 
 def _identify_content(path: Path, head: bytes) -> FileType:
@@ -209,6 +254,16 @@ def _identify_zip(path: Path) -> FileType:
             subtype, app = "excel", "Excel"
         elif any(n.startswith("ppt/") for n in lowered):
             subtype, app = "powerpoint", "PowerPoint"
+        elif not has_macros:
+            # Same packaging format (Open Packaging Conventions) as Office, but a software
+            # package: NuGet, VSIX, MSIX/APPX. Treated as a zip so its files are extracted
+            # and analyzed. M5 benign corpus 2: PowerShell Gallery modules were otherwise
+            # read as unknown Office documents and their scripts never examined.
+            return FileType(
+                "zip", "ZIP archive (Open Packaging Conventions package: NuGet, VSIX, "
+                "MSIX/APPX or similar)",
+                details={"members": len(names), "looks_like": "OPC package"},
+            )
         else:
             subtype, app = "other", "Office Open XML"
         macro = " with a VBA project (macros)" if has_macros else ""
@@ -225,6 +280,24 @@ def _identify_zip(path: Path) -> FileType:
     )
 
 
+def utf16_without_bom(sample: bytes) -> str | None:
+    """The codec of UTF-16 text saved without a byte-order mark, or None.
+
+    Mostly-ASCII UTF-16 has a zero in nearly every odd byte (little-endian) or every even
+    byte (big-endian), and almost none in the other. M5 holdout set 2: a GuLoader VBScript
+    saved this way was reported as unrecognized binary data and never analyzed as a
+    script."""
+    if len(sample) < 16:
+        return None
+    even, odd = sample[0::2], sample[1::2]
+    zeros_even, zeros_odd = even.count(0) / len(even), odd.count(0) / len(odd)
+    if zeros_odd >= 0.6 and zeros_even <= 0.05:
+        return "utf-16-le"
+    if zeros_even >= 0.6 and zeros_odd <= 0.05:
+        return "utf-16-be"
+    return None
+
+
 def _decode_text(head: bytes) -> str | None:
     sample = head[:8192]
     if sample.startswith((b"\xff\xfe", b"\xfe\xff")):
@@ -233,12 +306,25 @@ def _decode_text(head: bytes) -> str | None:
         except UnicodeDecodeError:
             return sample[: len(sample) // 2 * 2].decode("utf-16", errors="replace")
     if b"\x00" in sample:
-        return None
+        codec = utf16_without_bom(sample)
+        if codec is None:
+            return None
+        text = sample[: len(sample) // 2 * 2].decode(codec, errors="replace")
+        return text if _text_ratio(text) >= 0.95 else None
     text = sample.decode("utf-8", errors="replace").lstrip("﻿")
-    printable = sum(1 for c in text if c.isprintable() or c in "\r\n\t")
-    if printable / max(len(text), 1) < 0.95:
+    if _text_ratio(text) < 0.95:
         return None
     return text
+
+
+def _text_ratio(text: str) -> float:
+    """Share of characters that are not control codes. Format characters (zero-width
+    spaces and joiners) and private-use characters are text: str.isprintable() rejects
+    them, and M5 holdout set 2 had an 8.6 MB RemcosRAT JScript padded with them that was
+    reported as unrecognized binary data."""
+    controls = sum(1 for c in text
+                   if unicodedata.category(c) == "Cc" and c not in "\r\n\t")
+    return 1 - controls / max(len(text), 1)
 
 
 SCRIPT_HINTS: dict[str, list[str]] = {
@@ -270,7 +356,15 @@ SCRIPT_NAMES = {
 }
 
 
+JSON_START = re.compile(r'^\s*(?:\{\s*"|\[\s*[{\["\d\-]|\[\s*\])')
+
+
 def _identify_text(text: str) -> FileType:
+    # JSON data names cmdlets and APIs as strings and scored as PowerShell. M5 corpus 2: a
+    # PSScriptAnalyzer settings file listing Invoke-WebRequest, Invoke-Expression and
+    # Start-Process was judged a malicious script. No script language starts like this.
+    if JSON_START.match(text):
+        return FileType("text", "JSON data", subtype="json")
     scores = {
         lang: sum(1 for p in patterns if re.search(p, text, re.MULTILINE))
         for lang, patterns in SCRIPT_HINTS.items()

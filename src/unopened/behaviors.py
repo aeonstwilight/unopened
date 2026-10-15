@@ -6,6 +6,7 @@ returns one finding per pattern that matched. Never looks at the sample itself.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from functools import cache
@@ -15,6 +16,7 @@ from typing import Any
 from .model import AnalyzerResult, Finding, Severity, Status
 
 SOURCE = "behavior"
+SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3}
 
 
 class PatternError(ValueError):
@@ -32,12 +34,20 @@ class Pattern:
 
 
 def _check_signal(pid: str, signal: str) -> None:
-    kind, sep, value = signal.partition(":")
-    if not sep:
-        kind, sep, value = signal.partition("~")
-        kind += "~"
-    if kind not in ("capa", "capa~", "finding") or not value:
+    kind = next((k for k in ("capa:", "capa~", "capa/", "finding:") if signal.startswith(k)),
+                None)
+    value = signal[len(kind):] if kind else ""
+    if not value:
         raise PatternError(f"behavior {pid}: bad signal {signal!r}")
+    if kind == "capa/":
+        try:
+            re.compile(value)
+        except re.error as exc:
+            raise PatternError(f"behavior {pid}: bad regex in {signal!r}: {exc}") from exc
+    if kind == "finding:" and "@" in value:
+        fid, _, level = value.partition("@")
+        if not fid or level not in SEVERITY_RANK:
+            raise PatternError(f"behavior {pid}: bad severity in {signal!r}")
 
 
 def parse(data: dict[str, Any]) -> list[Pattern]:
@@ -65,7 +75,7 @@ def patterns() -> tuple[Pattern, ...]:
     return tuple(parse(tomllib.loads(text)))
 
 
-def _signal_hit(signal: str, capa: set[str], finding_ids: set[str]) -> str | None:
+def _signal_hit(signal: str, capa: set[str], finding_ids: dict[str, int]) -> str | None:
     if signal.startswith("capa:"):
         name = signal[5:]
         return f"capa: {name}" if name in capa else None
@@ -73,9 +83,15 @@ def _signal_hit(signal: str, capa: set[str], finding_ids: set[str]) -> str | Non
         text = signal[5:].lower()
         hit = next((c for c in sorted(capa) if text in c.lower()), None)
         return f"capa: {hit}" if hit else None
+    if signal.startswith("capa/"):
+        rx = re.compile(signal[5:], re.IGNORECASE)
+        hit = next((c for c in sorted(capa) if rx.search(c)), None)
+        return f"capa: {hit}" if hit else None
     if signal.startswith("finding:"):
-        fid = signal[8:]
-        return f"finding {fid}" if fid in finding_ids else None
+        fid, _, level = signal[8:].partition("@")
+        if fid not in finding_ids or finding_ids[fid] < SEVERITY_RANK.get(level, 0):
+            return None
+        return f"finding {fid}" + (f" at {level.upper()} or above" if level else "")
     return None
 
 
@@ -84,14 +100,23 @@ def evaluate(results: list[AnalyzerResult],
     """One synthetic analyzer result holding a finding per matched pattern."""
     pattern_list = patterns() if pattern_list is None else pattern_list
     by_name = {r.name: r for r in results}
-    finding_ids = {f.id for r in results for f in r.findings}
+    # Highest severity seen per finding ID ("finding:ID@medium" needs MEDIUM or above).
+    finding_ids: dict[str, int] = {}
+    for r in results:
+        for f in r.findings:
+            rank = SEVERITY_RANK.get(str(f.severity), 0)
+            finding_ids[f.id] = max(rank, finding_ids.get(f.id, 0))
     capa_result = by_name.get("capa")
     capa = {c["name"] for c in (capa_result.data.get("capabilities", [])
                                 if capa_result and capa_result.status == Status.OK else [])}
     sig = by_name.get("authenticode")
-    signed_flag = (sig.data or {}).get("signed") if sig is not None else None
-    unsigned = "sig.unsigned" in finding_ids
-    signed = signed_flag is True
+    sig_data = (sig.data or {}) if sig is not None else {}
+    # A signature that fails verification (untrusted certificate, altered file, malformed
+    # data) lends no trust, so unsigned-only patterns apply in full. M5 holdout: three
+    # Vidar samples and a side-loaded DLL carried such signatures.
+    failed = sig_data.get("signed") is True and sig_data.get("valid") is False
+    unsigned = "sig.unsigned" in finding_ids or failed
+    signed = sig_data.get("signed") is True
 
     out = AnalyzerResult(SOURCE, Status.OK, data={"matched": [], "blocked_by_signature": []})
     for p in pattern_list:
@@ -102,7 +127,9 @@ def evaluate(results: list[AnalyzerResult],
                 break
             evidence.append(hit)
         else:
-            severity, note = p.severity, "; not digitally signed" if p.unsigned else ""
+            severity = p.severity
+            note = ("" if not p.unsigned else
+                    "; its signature does not verify" if failed else "; not digitally signed")
             if p.unsigned and not unsigned:
                 if not signed:
                     out.data["blocked_by_signature"].append(p.id)

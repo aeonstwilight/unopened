@@ -204,3 +204,23 @@ def test_results_are_written_as_files_finish(tmp_path, samples, monkeypatch):
     monkeypatch.setattr(validation, "append_csv", spy)
     assert validation.main([str(samples), "--out", str(out)]) == 0
     assert seen == sorted(seen) and len(seen) == 3  # one append per file, growing
+
+
+def test_resume_survives_a_row_cut_off_by_a_crash(tmp_path, samples, capsys):
+    # M5 corpus 2: a VM stall killed the run while it wrote a row, leaving a cut-off last
+    # line (and NUL bytes); --resume then crashed reading it.
+    out = tmp_path / "out"
+    assert validation.main([str(samples), "--out", str(out)]) == 0
+    full = _verdicts(out)
+    lines = (out / "results.csv").read_text().splitlines()
+    first, second = lines[1], lines[2]
+    cut = second[: len(second) // 3]  # the second file's row, cut off mid-write
+    (out / "results.csv").write_text("\n".join([lines[0], first]) + "\n" + cut + "\0\0")
+    capsys.readouterr()
+    assert validation.main([str(samples), "--out", str(out), "--resume"]) == 0
+    err = capsys.readouterr().err
+    assert "resuming: 1 file(s) already done; dropped 1 incomplete row(s)" in err
+    assert f"triage {second.split(',')[0]}" in err  # the cut-off file is redone
+    assert _verdicts(out) == full
+    text = (out / "results.csv").read_text()
+    assert "\0" not in text and len(text.splitlines()) == len(lines)

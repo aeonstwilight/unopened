@@ -13,13 +13,51 @@ from importlib import resources
 from typing import Any
 
 from ..deobfuscate import deobfuscate
+from ..identify import utf16_without_bom
 from ..model import AnalyzerOutput, Finding, Severity
 from . import Context
 
 MAX_TEXT = 5 * 1024 * 1024
 MAX_SHOWN = 4_000
 LONG_LINE = 2_000
-NOISY_CONCAT = 10  # this many joined fragments is obfuscation, not style
+# No hand-written or minified script needs a single line this long: jQuery, minified, is
+# about 90,000 characters. M5 holdout set 2: a RemcosRAT JScript dropper was one line of
+# 3,018,473 characters.
+EXTREME_LINE = 500_000
+_NUM = r"(?:&H[0-9a-fA-F]+|0x[0-9a-fA-F]+|\d+)"
+CHAR_CODE_RUNS = [  # three or more char codes in a row
+    re.compile(rf"(?i)(?:\bChrW?\$?\(\s*{_NUM}\s*\)\s*[&+]\s*){{2,}}\bChrW?\$?\(\s*{_NUM}\s*\)"),
+    re.compile(rf"(?i)(?:\[char\]\s*{_NUM}\s*\+\s*){{2,}}\[char\]\s*{_NUM}"),
+    re.compile(rf"fromCharCode\(\s*{_NUM}(?:\s*,\s*{_NUM}){{2,}}\s*\)"),
+    re.compile(rf"(?i)\[char\[\]\]\s*\(\s*{_NUM}(?:\s*,\s*{_NUM}){{2,}}"),
+]
+_NUM_TOKEN = re.compile(r"(?i)&H([0-9a-f]+)|0x([0-9a-f]+)|(\d+)")
+
+
+def _spells_something(run: str) -> bool:
+    """A char-code run hides text only if it spells visible ASCII: obfuscation hides URLs,
+    commands and API names. M5 corpus 2: slmgr.vbs builds the UTF-8 byte-order mark,
+    Chr(239) + Chr(187) + Chr(191), to check a file's encoding; whitespace runs such as
+    Chr(13) & Chr(10) & Chr(9) are not text either."""
+    visible = 0
+    for h, x, d in _NUM_TOKEN.findall(run):
+        code = int(h, 16) if h else int(x, 16) if x else int(d)
+        if 33 <= code <= 126:
+            visible += 1
+    return visible >= 3
+
+
+LITERAL = re.compile(r"""'[^'\r\n]*'|"[^"\r\n]*\"""")
+LITERAL_CHAIN = re.compile(
+    r"""(?:(?:'[^'\r\n]*'|"[^"\r\n]*")\s*[+&]\s*){2,}(?:'[^'\r\n]*'|"[^"\r\n]*")""")
+# cmd.exe substring expansion, %name:~5,1%: a date or path parser uses a handful; batch
+# obfuscators spell every command one character at a time. M5 holdout set 2: an AsyncRAT
+# batch file had 783.
+BAT_SLICE = re.compile(r"%[^\s%:=]+:~-?\d+(?:,-?\d+)?%")
+BAT_SLICES_MIN = 50
+CHAIN_MIN = 4   # literals joined back to back
+CHAINS_MIN = 3  # this many such chains is a pattern, not one formatting line
+LONG_CHAIN = 8  # or one chain this long
 
 
 @cache
@@ -65,6 +103,8 @@ def keyword_findings(prefix: str, hits: list[dict[str, Any]], where: str) -> lis
 def read_text(data: bytes) -> str:
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
         return data.decode("utf-16", errors="replace")
+    if codec := utf16_without_bom(data[:8192]):
+        return data[: len(data) // 2 * 2].decode(codec, errors="replace")
     return data.decode("utf-8", errors="replace").lstrip("﻿")
 
 
@@ -77,13 +117,11 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
         out.not_checked.append(f"Script text beyond the first {MAX_TEXT:,} bytes")
         raw = raw[:MAX_TEXT]
     text = read_text(raw)
-    result = deobfuscate(text)
+    result = deobfuscate(text, language=language)
     if result.truncated:
         out.not_checked.append("Deobfuscated output beyond the size cap")
 
     techniques = result.techniques()
-    concat_steps = sum(layer.count for layer in result.layers
-                       if layer.technique == "string concatenation")
     longest = max((len(line) for line in text.splitlines()), default=0)
     out.data = {
         "language": language,
@@ -100,16 +138,38 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
     out.data["keywords"] = hits
     out.findings += keyword_findings("script", hits, "the script")
 
-    encoded = techniques & {"base64", "char codes"}
-    if encoded or concat_steps >= NOISY_CONCAT:
-        what = sorted(encoded) + (["heavy string concatenation"]
-                                  if concat_steps >= NOISY_CONCAT else [])
+    # Shape, not count: obfuscation chains char codes and literals together (Chr(104) &
+    # Chr(116) & Chr(116) & Chr(112) spells "http"); ordinary code uses them one at a time
+    # (Chr(34) & name & Chr(34)). M5 corpus 2: slmgr.vbs and jQuery have hundreds of
+    # isolated ones and were called obfuscated. Runs are found in the text as written.
+    char_runs = sum(1 for rx in CHAR_CODE_RUNS for m in rx.finditer(text)
+                    if _spells_something(m.group(0)))
+    chains = [len(LITERAL.findall(m.group(0))) for m in LITERAL_CHAIN.finditer(text)]
+    heavy_concat = (sum(1 for n in chains if n >= CHAIN_MIN) >= CHAINS_MIN
+                    or any(n >= LONG_CHAIN for n in chains))
+    slices = len(BAT_SLICE.findall(text)) if language == "batch" else 0
+    encoded = (techniques & {"base64"}) | ({"char codes"} if char_runs else set())
+    if slices >= BAT_SLICES_MIN:
+        encoded.add("variable substrings")
+    out.data["obfuscation_shape"] = {"char_code_runs": char_runs,
+                                     "literal_chains": sum(1 for n in chains if n >= CHAIN_MIN),
+                                     "longest_chain": max(chains, default=0),
+                                     "batch_substrings": slices}
+    if encoded or heavy_concat:
+        what = sorted(encoded) + (["heavy string concatenation"] if heavy_concat else [])
         out.findings.append(Finding(
             "script.obfuscated", Severity.MEDIUM, "Script is obfuscated",
             f"Uses {', '.join(what)} to hide its text. The decoded form is shown in the "
             "Script section and was searched for keywords and indicators.",
         ))
-    if longest > LONG_LINE:
+    if longest > EXTREME_LINE:
+        out.findings.append(Finding(
+            "script.long_line", Severity.MEDIUM,
+            f"Extremely long line ({longest:,} characters)",
+            f"No ordinary script, even a minified one, has a line over {EXTREME_LINE:,} "
+            "characters. Lines like this hold an encoded payload or packed code.",
+        ))
+    elif longest > LONG_LINE:
         out.findings.append(Finding(
             "script.long_line", Severity.LOW, f"Very long line ({longest:,} characters)",
             "Long single lines usually hold encoded data or packed code.",

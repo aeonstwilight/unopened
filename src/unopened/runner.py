@@ -78,7 +78,11 @@ def _run_isolated(analyzer: Analyzer, ctx: Context, timeout: float) -> tuple[str
             proc.kill()
 
 
-def run_analyzer(analyzer: Analyzer, ctx: Context, *, isolate: bool = True) -> AnalyzerResult:
+def run_analyzer(analyzer: Analyzer, ctx: Context, *, isolate: bool = True,
+                 time_left: float | None = None) -> AnalyzerResult:
+    """`time_left` is what remains of the whole file's time budget (Options.file_timeout);
+    the analyzer gets the smaller of that and its own limit, and none at all once it is
+    used up."""
     if analyzer.kinds is not None and ctx.file_type.kind not in analyzer.kinds:
         return AnalyzerResult(analyzer.name, Status.NOT_APPLICABLE)
     missing = _missing_module(analyzer.requires)
@@ -87,12 +91,23 @@ def run_analyzer(analyzer: Analyzer, ctx: Context, *, isolate: bool = True) -> A
         return AnalyzerResult(
             analyzer.name, Status.UNAVAILABLE, f"Python package '{missing}' is not installed{hint}"
         )
+    budget = ctx.options.file_timeout
+    if time_left is not None and time_left <= 0:
+        return AnalyzerResult(analyzer.name, Status.TIMEOUT,
+                              f"not run: the {budget:g}-second time budget for this file "
+                              "was used up by earlier checks")
+    own = ctx.options.timeout_for(analyzer.name)
+    clipped = time_left is not None and time_left < own
+    timeout = time_left if clipped else own
     start = time.monotonic()
     if isolate:
-        kind, payload = _run_isolated(analyzer, ctx, ctx.options.timeout_for(analyzer.name))
+        kind, payload = _run_isolated(analyzer, ctx, timeout)
     else:
         kind, payload = _execute(analyzer, ctx)
     duration = time.monotonic() - start
+    if kind == "timeout" and clipped:
+        payload = (f"stopped after {timeout:g} seconds, when the {budget:g}-second time "
+                   "budget for this file ran out")
     if kind != "ok":
         return AnalyzerResult(analyzer.name, Status(kind), str(payload), duration)
     out: AnalyzerOutput = payload

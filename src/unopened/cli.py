@@ -84,6 +84,10 @@ def build_parser() -> argparse.ArgumentParser:
                         "(default: $UNOPENED_CAPA_SIGNATURES)")
     t.add_argument("--capa-timeout", type=positive_float, default=300.0,
                    help="seconds capa may run before it is stopped (default: 300)")
+    t.add_argument("--file-timeout", type=positive_float, default=900.0,
+                   help="seconds for the whole file, archive members included; checks "
+                        "still pending when it runs out are reported as not run "
+                        "(default: 900)")
     t.add_argument("--reputation", action="store_true",
                    help="look up SHA256 hashes at MalwareBazaar (ABUSECH_API_KEY) and "
                         "VirusTotal (VT_API_KEY); off by default; never uploads the file")
@@ -151,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         max_strings=args.max_strings,
         timeout=args.timeout,
         timeouts={"capa": args.capa_timeout},
+        file_timeout=args.file_timeout,
         allowlist=allowlist,
         yara_rules=args.yara_rules,
         capa_rules=args.capa_rules,

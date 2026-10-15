@@ -120,8 +120,33 @@ def _yara_high(f: Facts) -> Evidence | None:
     return _titles([x for x in f.with_id("yara.match") if x.severity == Severity.HIGH])
 
 
+# olevba keywords that run programs, fetch content or call Windows directly. CreateObject,
+# Environ and file I/O alone are everyday business-macro work (M5 corpus 2: a workbook that
+# creates a folder on open was rated malicious); with auto-run they stay suspicious.
+WEAPON_KEYWORDS = (
+    "shell", "exec", "createprocess", "urldownloadtofile", "xmlhttp", "winhttp",
+    "adodb.stream", "savetofile", "powershell", "cmd", "wscript", "callbyname", "lib",
+    "virtualalloc", "createthread", "rtlmovememory", "net.webclient", "macscript", "popen",
+    "strreverse", "base64",
+)
+WEAPON_EXACT = {"run"}  # olevba reports Run as a bare word; as a substring it is everywhere
+
+
+def _is_weapon(keyword: str) -> bool:
+    k = keyword.lower()
+    return k in WEAPON_EXACT or any(w in k for w in WEAPON_KEYWORDS)
+
+
 def _macro_autoexec(f: Facts) -> Evidence | None:
-    return _all(f.with_id("office.autoexec"), f.with_id("office.suspicious_keywords"))
+    auto = f.with_id("office.autoexec")
+    r = f.report.result("office")
+    if not auto or r is None:
+        return None
+    hits = sorted({s["keyword"] for s in r.data.get("suspicious", [])
+                   if _is_weapon(s["keyword"])})
+    if not hits:
+        return None
+    return [x.title for x in auto] + [f"macro uses {', '.join(hits[:5])}"]
 
 
 def _lnk_lolbin_command(f: Facts) -> Evidence | None:
@@ -204,7 +229,7 @@ RULES: list[Rule] = [
          "malicious. Needs --reputation and VT_API_KEY.", _vt_many),
     Rule("V-MAL-02", MALICIOUS, "high",
          "Office macros run automatically on open and use functions that run programs, "
-         "download files or create objects.", _macro_autoexec),
+         "download files or call Windows directly.", _macro_autoexec),
     Rule("V-MAL-03", MALICIOUS, "high",
          "A shortcut launches a scripting or download tool (LOLBin) with an encoded, hidden, "
          "padded or URL-bearing command, or carries an appended program.", _lnk_lolbin_command),
@@ -298,6 +323,14 @@ def evaluate(report: Report) -> dict[str, Any]:
         if report.file_type and report.file_type.kind == "empty":
             confidence = "low"
             caveats.append("lowered: the file is empty")
+        ft = report.file_type
+        if ft and ft.kind == "ole" and ft.subtype == "msi":
+            confidence = "low"
+            caveats.append("lowered: Windows Installer contents are not analyzed")
+        skipped = sum(len(r.data.get("members_not_analyzed", [])) for r in report.results)
+        if skipped:
+            confidence = "low"
+            caveats.append(f"lowered: {skipped} member(s) not analyzed (time budget used up)")
     elif incomplete and verdict in (MALICIOUS, SUSPICIOUS):
         caveats.append("note: some checks did not complete ("
                        + ", ".join(f"{r.name} {r.status}" for r in incomplete)

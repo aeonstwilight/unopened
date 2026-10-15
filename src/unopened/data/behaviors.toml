@@ -9,7 +9,9 @@
 # Signals:
 #   capa:NAME        a capa capability with exactly this name
 #   capa~TEXT        a capa capability whose name contains TEXT (case-insensitive)
+#   capa/REGEX       a capa capability whose name matches REGEX (case-insensitive)
 #   finding:ID       a finding with this ID from any analyzer
+#   finding:ID@LEVEL that finding at LEVEL (info, low, medium, high) or above
 #
 # `all` is a list of groups; each group is satisfied when any one of its signals is
 # present. `unsigned = true` also requires a positive "not digitally signed" result; if the
@@ -18,6 +20,10 @@
 # A pattern marked `unsigned` that matches a signed file is still reported, at LOW, so the
 # evidence stays visible. In M5 validation, keystroke and reverse-shell capabilities fired
 # on signed tools such as TCPView, Autoruns and PuTTY (a remote shell client by design).
+#
+# "Unsigned" includes a signature that fails verification (untrusted certificate, altered
+# file): it lends no trust. Only a signature that verifies, or one that could not be
+# checked, lowers these patterns to LOW.
 #
 # Severity was set during M5 validation. Patterns most likely to match legitimate unsigned
 # installers and updaters start at MEDIUM and are promoted only if the benign-corpus run
@@ -47,9 +53,9 @@ all = [["capa:enumerate files on Windows"], ["capa:send file via HTTP"]]
 [shellcode_loader]
 title = "Shellcode-style API loading"
 severity = "high"
-description = "Has no import table and finds Windows functions by walking loader structures in memory, a technique used to hide what a program calls."
+description = "Has no (or an almost empty) import table and finds Windows functions by walking loader structures in memory, a technique used to hide what a program calls."
 all = [
-    ["finding:pe.no_imports"],
+    ["finding:pe.no_imports", "finding:pe.small_import_table"],
     ["capa:access PEB ldr_data", "capa:resolve function by parsing PE exports"],
 ]
 
@@ -58,7 +64,10 @@ title = "Hidden strings and runtime-resolved APIs"
 severity = "high"
 description = "Builds its strings on the stack and looks up many functions at run time, so neither shows in a plain inspection."
 unsigned = true
-all = [["capa:contain obfuscated stackstrings"], ["capa:link many functions at runtime"]]
+all = [
+    ["capa:contain obfuscated stackstrings"],
+    ["capa:link many functions at runtime", "capa:resolve function by parsing PE exports"],
+]
 
 [dropper]
 title = "Drops an embedded program"
@@ -92,3 +101,87 @@ title = "Deletes itself"
 severity = "medium"
 description = "Removes its own file after running, which hides it from later inspection."
 all = [["capa:self delete"]]
+
+# Added after the M5 holdout run (samples the rules had not seen). Each pairs two signals
+# that were MEDIUM on their own and appeared together on real malware.
+
+[obfuscated_persistent_script]
+title = "Obfuscated script that sets up persistence"
+severity = "high"
+description = "Hides its code and arranges to run again at logon or on a schedule. Admin scripts set up tasks, but rarely while obfuscated."
+all = [
+    ["finding:script.obfuscated"],
+    ["finding:script.ps.persistence", "finding:script.bat.run_key", "finding:script.bat.schtasks"],
+]
+
+[untrusted_signer_injection]
+title = "Process-injection imports under an untrusted signature"
+severity = "high"
+description = "Imports the functions used to write code into other processes, and carries a signature that does not verify, which borrows the look of legitimacy without its substance."
+all = [
+    ["finding:sig.certificate_error", "finding:sig.invalid_digest", "finding:sig.parse_error"],
+    ["finding:pe.imports.process_injection"],
+]
+
+[flagged_dropper]
+title = "Embedded program, with a YARA match"
+severity = "high"
+description = "Carries another program inside it, and a configured YARA rule matched as well."
+unsigned = true
+all = [["capa:contain an embedded PE file"], ["finding:yara.match"]]
+
+[hidden_programs_in_image]
+title = "Disk image hiding files next to programs"
+severity = "high"
+description = "A disk image holds programs and also hides files from a normal folder view, the layout used to make a victim double-click one visible file while the rest stay out of sight."
+all = [["finding:archive.hidden_files"], ["finding:container.runnable_member"]]
+
+[uac_bypass]
+title = "Bypasses User Account Control"
+severity = "high"
+description = "Uses a known technique to gain administrator rights without the UAC prompt."
+unsigned = true
+all = [["capa~bypass UAC"]]
+
+# Added after holdout set 2 (M5). Compiled loaders whose single signals were each LOW or
+# MEDIUM, and which came back "no findings".
+
+[dotnet_crypter]
+title = ".NET program that loads hidden code from itself"
+severity = "high"
+description = "A .NET program whose code section looks encrypted or compressed, and which loads and invokes a .NET assembly at run time: the usual shape of a crypter that decrypts its real payload from a resource and runs it in memory. Normal .NET code is far less random."
+unsigned = true
+all = [
+    ["finding:pe.dotnet"],
+    ["finding:pe.high_entropy_section@medium"],
+    ["capa:load .NET assembly", "capa:invoke .NET assembly method"],
+]
+
+[api_hashing]
+title = "Finds Windows functions by hash"
+severity = "high"
+description = "Looks up Windows functions by comparing hashes of their names instead of naming them, so the functions it uses appear nowhere in the file. Shellcode, loaders and attack frameworks do this; ordinary programs do not need to."
+unsigned = true
+all = [["capa/^resolve function by .*hash"]]
+
+[com_script_with_payload_line]
+title = "Script with a huge encoded line that reaches Windows"
+severity = "high"
+description = "Creates Windows COM objects, runs commands or runs text as code (the ways JScript and VBScript reach the shell, the file system and the network), and carries a single line far longer than any normal script, where the real payload is packed."
+all = [
+    ["finding:script.js.activex", "finding:script.vbs.shell", "finding:script.vbs.execute"],
+    ["finding:script.long_line@medium"],
+]
+
+# A "decoded_execution" pattern (VBScript Execute/Eval plus Mid, StrReverse or Chr) was
+# tried after holdout set 2 and removed: Microsoft's slmgr.vbs and winrm.vbs run Execute
+# and Eval on variables and build strings the same way. Measured on the two GuLoader
+# samples and those two scripts, the Execute form and the string-building counts were the
+# same; only the share of comment lines differed, and four files are not enough to set a
+# threshold on that.
+
+[obfuscated_self_reading_batch]
+title = "Obfuscated batch file that reads itself"
+severity = "high"
+description = "Spells its commands through variable substrings or encodings and refers to its own file, the shape of a batch dropper that unpacks a payload appended to itself."
+all = [["finding:script.obfuscated"], ["finding:script.bat.self_read"]]

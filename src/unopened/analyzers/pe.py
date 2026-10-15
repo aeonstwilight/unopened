@@ -103,6 +103,7 @@ def analyze_pe(ctx: Context) -> AnalyzerOutput:
                 step()
             except Exception as exc:  # one malformed structure must not hide the rest
                 out.errors.append(f"{label}: {type(exc).__name__}: {exc}")
+        _soften_reproducible_timestamp(out)
         warnings = pe.get_warnings()
         out.data["parser_warnings"] = warnings[:MAX_WARNINGS]
         anomalies = [w for w in warnings if not w.startswith(REDUNDANT_WARNINGS)]
@@ -328,13 +329,32 @@ def _exports(pe: Any, out: AnalyzerOutput) -> None:
     out.data["export_count"] = len(names)
 
 
+IMAGE_DEBUG_TYPE_REPRO = 16
+
+
 def _debug(pe: Any, out: AnalyzerOutput) -> None:
     for dbg in getattr(pe, "DIRECTORY_ENTRY_DEBUG", []):
+        if getattr(getattr(dbg, "struct", None), "Type", None) == IMAGE_DEBUG_TYPE_REPRO:
+            out.data["reproducible_build"] = True
         entry = getattr(dbg, "entry", None)
         pdb = getattr(entry, "PdbFileName", None)
-        if pdb:
+        if pdb and "pdb_path" not in out.data:
             out.data["pdb_path"] = pdb.rstrip(b"\0").decode("utf-8", errors="replace")
-            return
+
+
+def _soften_reproducible_timestamp(out: AnalyzerOutput) -> None:
+    """A reproducible-build linker writes a hash where the build time would be, so the
+    "timestamp" can land anywhere. M5 holdout: Microsoft-signed DLLs in an ISO were rated
+    MEDIUM for a future timestamp that was really such a hash."""
+    if not out.data.get("reproducible_build"):
+        return
+    for i, f in enumerate(out.findings):
+        if f.id in ("pe.timestamp_future", "pe.timestamp_old"):
+            out.findings[i] = Finding(
+                f.id, Severity.INFO, f.title + " (reproducible build: not a real date)",
+                "The debug directory marks this as a reproducible build, whose linker writes "
+                "a content hash in place of the build time. The value is not a date, so it "
+                "is not evidence of forgery.", f.source)
 
 
 def _security_dir(pe: Any, size: int, out: AnalyzerOutput) -> None:

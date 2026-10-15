@@ -154,3 +154,51 @@ def test_pe_with_storage_extension_is_low_not_high(make_file, fixtures, name):
 def test_pe_with_decoy_extension_stays_high(make_file, fixtures, name):
     ft = identify(make_file(name, fixtures.benign_exe()))
     assert [m.severity for m in ft.mismatches] == [Severity.HIGH]
+
+
+@pytest.mark.parametrize(("name", "lang"), [
+    ("a.js", "javascript"), ("a.ps1", "powershell"), ("a.bat", "batch"), ("a.vbs", "vbscript"),
+])
+def test_padded_script_is_identified_by_name(make_file, name, lang):
+    # M5 holdout: scripts led by junk padding scored nothing on the content heuristics, were
+    # called plain text, and the script analyzer never ran.
+    padding = "".join(f"qzx{i} wvk{i * 7} " for i in range(4000)) + "\n"
+    ft = identify(make_file(name, padding.encode()))
+    assert (ft.kind, ft.subtype) == ("script", lang)
+    assert ft.details["identified_by"] == "extension"
+    assert ft.mismatches == []
+
+
+def test_text_with_other_names_stays_text(make_file):
+    for name in ("notes.txt", "README", "a.exe"):
+        assert identify(make_file(name, b"plain words only\n")).kind == "text"
+
+
+def test_opc_software_package_is_a_zip(make_file):
+    # NuGet, VSIX and MSIX packages share Office's [Content_Types].xml but are archives of
+    # software; they must be extracted so the scripts and programs inside get analyzed.
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("[Content_Types].xml", "<Types/>")
+        zf.writestr("tools/install.ps1", "Write-Output 'hi'")
+        zf.writestr("Module.nuspec", "<package/>")
+    ft = identify(make_file("Module.nupkg", buf.getvalue()))
+    assert ft.kind == "zip" and ft.details["looks_like"] == "OPC package"
+    assert ft.mismatches == []
+
+
+def test_json_listing_cmdlets_is_data_not_a_script(make_file):
+    # M5 corpus 2: PSScriptAnalyzer's core-6.1.0-windows.json scored as PowerShell.
+    data = (b'{\n  "Modules": [\n    {"Name": "Microsoft.PowerShell.Utility", "ExportedCmdlets": '
+            b'["Invoke-WebRequest", "Invoke-Expression", "Invoke-RestMethod", "New-Object", '
+            b'"Start-Process", "Set-Variable", "Get-Content", "Write-Output"]}\n  ]\n}\n')
+    ft = identify(make_file("core-6.1.0-windows.json", data))
+    assert (ft.kind, ft.subtype) == ("text", "json")
+    assert ft.mismatches == []
+
+
+def test_script_named_js_starting_like_json_is_still_a_script(make_file):
+    ft = identify(make_file("a.js", b'["a", "b"].forEach(function (x) { WScript.Echo(x); });\n'))
+    assert ft.kind == "script"

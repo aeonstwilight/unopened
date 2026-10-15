@@ -47,12 +47,29 @@ def _target(j: dict[str, Any]) -> str:
     net = (info.get("common_network_relative_link") or {}).get("net_name")
     if net:
         return net + "\\" + (info.get("common_path_suffix") or "")
+    extra = j.get("extra") or {}
+    # Windows' own Start-menu shortcuts often keep the target only here, as a path with
+    # environment variables (%windir%\\system32\\charmap.exe). M5 corpus 2: 17 of them.
+    env = extra.get("ENVIRONMENTAL_VARIABLES_LOCATION_BLOCK") or {}
+    expanded = _clean(env.get("target_unicode")) or _clean(env.get("target_ansi"))
+    if expanded:
+        return expanded
     data = j.get("data") or {}
     if data.get("relative_path"):
         return data["relative_path"]
     items = (j.get("target") or {}).get("items") or []
     names = [i.get("primary_name") or i.get("data") for i in items if isinstance(i, dict)]
-    return "\\".join(str(n) for n in names if n)
+    joined = "\\".join(str(n) for n in names if n)
+    if joined:
+        return joined
+    # Windows Installer "advertised" shortcut: names an installed product, not a path.
+    darwin = extra.get("DARWIN_BLOCK") or {}
+    product = _clean(darwin.get("darwin_data_unicode")) or _clean(darwin.get("darwin_data_ansi"))
+    return f"[Windows Installer advertised shortcut: {product}]" if product else ""
+
+
+def _clean(value: Any) -> str:
+    return str(value).split("\0", 1)[0].strip() if value else ""
 
 
 def _mac_from_droid(droid: str | None) -> str | None:

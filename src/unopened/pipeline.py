@@ -8,8 +8,10 @@ is deleted when triage returns, whether it succeeded or not.
 from __future__ import annotations
 
 import itertools
+import re
 import shutil
 import tempfile
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -59,6 +61,11 @@ PLANNED_BY_KIND: dict[str, list[tuple[str, str]]] = {
                  "and YARA were checked")],
 }
 EXTRACTING_KINDS = {"zip", "7z", "iso", "pdf"}
+# M5 holdout: two MSI installers came back "no findings" without the report saying their
+# contents were never examined.
+MSI_NOT_CHECKED = "Windows Installer (MSI) contents"
+MSI_REASON = ("custom actions, embedded scripts and packaged files are not analyzed in "
+              "version 1; only hashes, strings and YARA were checked")
 MEMBER_SOURCES = ("archive", "pdf")
 RUNNABLE_MEMBER_KINDS = {"pe", "mz", "lnk", "script"}
 
@@ -72,6 +79,10 @@ class _Session:
         self.budget = Budget.from_limits(options.limits)
         self.workdir = Path(tempfile.mkdtemp(prefix="unopened-"))  # mode 0700
         self.counter = itertools.count(1)
+        self.deadline = time.monotonic() + options.file_timeout
+
+    def time_left(self) -> float:
+        return self.deadline - time.monotonic()
 
     def new_extract_dir(self) -> Path:
         d = self.workdir / f"x{next(self.counter):04d}"
@@ -145,7 +156,10 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
                   extract_dir=extract_dir, files_left=session.budget.files_left,
                   bytes_left=session.budget.bytes_left)
     analyzers = registry()
-    results = extra_results + [run_analyzer(a, ctx, isolate=session.isolate) for a in analyzers]
+    results = extra_results + [
+        run_analyzer(a, ctx, isolate=session.isolate, time_left=session.time_left())
+        for a in analyzers
+    ]
     titles = {a.name: a.title for a in analyzers} | {"identify": "File type identification"}
     by_name = {r.name: r for r in results}
 
@@ -160,10 +174,17 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
         r = by_name.get(source)
         if r is None or r.status not in (Status.OK, Status.PARTIAL) or extract_dir is None:
             continue
-        for member in r.data.get("members", []):
-            if not member.get("stored"):
-                continue
+        stored_members = [m for m in r.data.get("members", []) if m.get("stored")]
+        for i, member in enumerate(stored_members):
             stored = extract_dir / member["stored"]
+            if session.time_left() <= 0:
+                rest = stored_members[i:]
+                r.data["members_not_analyzed"] = [m["name"] for m in rest]
+                r.not_checked.append(
+                    f"{len(rest)} of {len(stored_members)} extracted member(s) were not "
+                    f"analyzed: the {options.file_timeout:g}-second time budget for this file "
+                    f"was used up (first: {', '.join(m['name'] for m in rest[:3])})")
+                break
             child = _triage(session, stored, name=basename(member["name"]), depth=depth + 1)
             child.file_name = member["name"]
             children.append({"source": source, "member": member, "report": child})
@@ -233,19 +254,31 @@ SIGNED_YARA_NOTE = (
 )
 
 
+SIGNED_PACKING_NOTE = (
+    " The file carries a valid Authenticode signature: publishers sign packed and "
+    "self-extracting builds routinely (M5 corpus 2: Rufus, a UPX-packed tool signed by its "
+    "developer), so packing on a signed file is rated LOW. A valid signature is not proof "
+    "of safety."
+)
+PACKING_FINDINGS = {"pe.packer_section", "pe.wx_section", "pe.high_entropy_section"}
+
+
 def temper_for_valid_signature(results: list[AnalyzerResult]) -> None:
-    """A lone HIGH YARA match on a validly signed file becomes MEDIUM, with a note.
-    Other evidence, including behavior patterns, is unchanged."""
+    """On a validly signed file, a lone HIGH YARA match becomes MEDIUM and packing
+    findings become LOW, each with a note. Other evidence, including behavior patterns,
+    is unchanged."""
     sig = next((r for r in results if r.name == "authenticode"), None)
     if sig is None or not (sig.data or {}).get("valid"):
         return
     for r in results:
-        if r.name != "yara":
-            continue
         for i, f in enumerate(r.findings):
-            if f.id == "yara.match" and f.severity == Severity.HIGH:
+            if r.name == "yara" and f.id == "yara.match" and f.severity == Severity.HIGH:
                 r.findings[i] = Finding(f.id, Severity.MEDIUM, f.title,
                                         f.detail + SIGNED_YARA_NOTE, f.source)
+            elif (r.name == "pe" and f.id in PACKING_FINDINGS
+                  and f.severity in (Severity.HIGH, Severity.MEDIUM)):
+                r.findings[i] = Finding(f.id, Severity.LOW, f.title,
+                                        f.detail + SIGNED_PACKING_NOTE, f.source)
 
 
 def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
@@ -271,6 +304,17 @@ def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
             "The classic disk-image lure: the user sees only a shortcut, which runs the hidden "
             f"payload ({', '.join(c['member']['name'] for c in hidden[:5])}).", "container",
         ))
+    sideload = sideload_pair(children)
+    if sideload:
+        exe, dll, why = sideload
+        findings.append(Finding(
+            "container.sideload", Severity.HIGH,
+            "Signed program shipped with a DLL that runs shellcode",
+            f"{exe['member']['name']} carries a valid signature; {dll['member']['name']} next "
+            f"to it {why} and has loader traits ({', '.join(sideload_traits(dll))}). This "
+            "is DLL side-loading: Windows loads a DLL from the program's own folder first, so "
+            "a trusted, signed program runs the attacker's DLL.", "container",
+        ))
     disguised = [c for c in children if c["report"].file_type
                  and any(m.severity == Severity.HIGH for m in c["report"].file_type.mismatches)]
     if disguised:
@@ -281,6 +325,63 @@ def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
             + ". See the member's section for details.", "container",
         ))
     return findings
+
+
+# capa capabilities of a DLL built to run a payload rather than to provide functions.
+SHELLCODE_CALL = "execute shellcode via indirect call"
+LOADER_SUPPORT = {"allocate or change RWX memory", "contain an embedded PE file"}
+
+
+def _capa_names(report: Report) -> set[str]:
+    r = report.result("capa")
+    if r is None or r.status != Status.OK:
+        return set()
+    return {c["name"] for c in r.data.get("capabilities", [])}
+
+
+def sideload_traits(child: dict[str, Any]) -> list[str]:
+    caps = _capa_names(child["report"])
+    if SHELLCODE_CALL not in caps or not caps & LOADER_SUPPORT:
+        return []
+    return sorted({SHELLCODE_CALL} | (caps & LOADER_SUPPORT))
+
+
+def _signature(report: Report) -> dict[str, Any]:
+    r = report.result("authenticode")
+    return (r.data or {}) if r is not None and r.status == Status.OK else {}
+
+
+def _organization(sig: dict[str, Any]) -> str | None:
+    subjects = [s.get("subject") or "" for s in sig.get("signers", [])]
+    if not subjects or not subjects[0]:
+        return None
+    m = re.search(r"(?:^|,\s*)O=((?:\\,|[^,])+)", subjects[0])
+    return (m.group(1) if m else subjects[0]).replace("\\,", ",").strip().lower()
+
+
+def sideload_pair(children: list[dict[str, Any]]) -> tuple[dict, dict, str] | None:
+    """A validly signed EXE next to a DLL that runs shellcode and does not share its
+    signer. M5 holdout set 2: an ISO held a Dropbox-signed program and a DLL signed by an
+    individual that allocates RWX memory, carries an embedded PE and calls shellcode;
+    each file on its own had nothing above LOW."""
+    def subtype(c: dict[str, Any]) -> str:
+        ft = c["report"].file_type
+        return ft.subtype if ft and ft.kind == "pe" else ""
+
+    exes = [c for c in children if subtype(c) == "exe" and _signature(c["report"]).get("valid")]
+    for dll in (c for c in children if subtype(c) == "dll" and sideload_traits(c)):
+        sig = _signature(dll["report"])
+        for exe in exes:
+            if not sig.get("signed"):
+                why = "is not signed" if sig else "has no checked signature"
+            elif not sig.get("valid"):
+                why = "has a signature that does not verify"
+            elif _organization(sig) != _organization(_signature(exe["report"])):
+                why = "is signed by someone else"
+            else:
+                continue
+            return exe, dll, why
+    return None
 
 
 def build_not_checked(
@@ -299,6 +400,8 @@ def build_not_checked(
             items.append(NotChecked(title, note))
     for check, reason in PLANNED_BY_KIND.get(file_type.kind, []) + ALWAYS_PLANNED:
         items.append(NotChecked(check, reason))
+    if file_type.kind == "ole" and file_type.subtype == "msi":
+        items.append(NotChecked(MSI_NOT_CHECKED, MSI_REASON))
     return items
 
 

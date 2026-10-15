@@ -77,6 +77,27 @@ def test_timestamp_rules(make_file, fixtures, timestamp, title):
     assert title in titles(r)
 
 
+FUTURE = 4_100_000_000  # 2099
+
+
+def test_future_timestamp_is_medium(make_file, fixtures):
+    r = analyze(make_file("t.exe", fixtures.build_pe(fixtures.PESpec(
+        timestamp=FUTURE, pdb_path="C:\\b\\t.pdb"))))
+    (f,) = [f for f in r.findings if f.id == "pe.timestamp_future"]
+    assert f.severity == Severity.MEDIUM
+
+
+def test_reproducible_build_timestamp_is_not_evidence(make_file, fixtures):
+    # M5 holdout: Microsoft-signed DLLs were MEDIUM for a "future" timestamp that a
+    # reproducible-build linker had filled with a hash.
+    r = analyze(make_file("t.dll", fixtures.build_pe(fixtures.PESpec(
+        timestamp=FUTURE, pdb_path="C:\\b\\t.pdb", reproducible=True))))
+    assert r.data["reproducible_build"] is True
+    assert r.data["pdb_path"].endswith("t.pdb")
+    (f,) = [f for f in r.findings if f.id == "pe.timestamp_future"]
+    assert f.severity == Severity.INFO and "reproducible build" in f.title
+
+
 def test_entry_point_outside_sections(make_file, fixtures):
     r = analyze(make_file("e.exe", fixtures.build_pe(fixtures.PESpec(entry_point=0x90000))))
     assert "Entry point is outside every section" in titles(r)

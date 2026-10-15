@@ -424,12 +424,30 @@ def append_csv(results: list[Result], path: Path) -> None:
 
 def read_csv(path: Path) -> list[Result]:
     """Results written by an earlier, possibly interrupted, run."""
+    return read_partial_csv(path)[0]
+
+
+def read_partial_csv(path: Path) -> tuple[list[Result], int]:
+    """Results from an earlier run that may have been killed mid-write, and how many rows
+    were dropped. M5 corpus 2: a VM stall killed the run while it wrote a row; resume then
+    crashed on the cut-off line. A cut-off last line, and every other row of the same file,
+    is dropped so that file is triaged again rather than half-counted. NUL bytes left by
+    the crash are ignored."""
     def split(text: str, sep: str) -> list[str]:
         return [x for x in text.split(sep) if x]
 
-    out = []
-    with path.open(newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+    text = path.read_text(encoding="utf-8", errors="replace").replace("\0", "")
+    lines = text.splitlines(keepends=True)
+    cut_file = None
+    if lines and not lines[-1].endswith(("\n", "\r")) and len(lines) > 1:
+        cut_file = next(csv.reader([lines[-1]]), [None])[0]
+        lines = lines[:-1]
+    out, dropped = [], 1 if cut_file is not None else 0
+    for row in csv.DictReader(io.StringIO("".join(lines))):
+        if None in row.values() or None in row or row.get("file") == cut_file:
+            dropped += 1
+            continue
+        try:
             ok = row["verdict_ok"]
             out.append(Result(
                 file=row["file"], sample=row["sample"], sha256=row["sha256"], kind=row["kind"],
@@ -442,7 +460,9 @@ def read_csv(path: Path) -> list[Result]:
                 surfaced=split(row["surfaced"], ";"), incomplete=split(row["incomplete"], ";"),
                 seconds=float(row["seconds"] or 0), notes=row["notes"],
             ))
-    return out
+        except (KeyError, ValueError):
+            dropped += 1
+    return out, dropped
 
 
 def _md(text: str) -> str:
@@ -603,11 +623,13 @@ def main(argv: list[str] | None = None) -> int:
     csv_path = args.out / "results.csv"
     earlier: list[Result] = []
     if args.resume and csv_path.exists():
-        earlier = read_csv(csv_path)
+        earlier, dropped = read_partial_csv(csv_path)
+        write_csv(earlier, csv_path)  # rewrite clean so new rows do not join a cut-off line
         for r in earlier:  # mark their expectations as used
             index.find(r.sha256, r.sample)
-        print(f"resuming: {len({r.file for r in earlier})} file(s) already done",
-              file=sys.stderr)
+        print(f"resuming: {len({r.file for r in earlier})} file(s) already done"
+              + (f"; dropped {dropped} incomplete row(s), their files will be redone"
+                 if dropped else ""), file=sys.stderr)
     else:
         csv_path.unlink(missing_ok=True)
     results, failures = validate(

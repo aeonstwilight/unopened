@@ -105,6 +105,7 @@ reported as not run, never as "no matches".
 | `--capa-timeout SECONDS` | `300` | Time limit for capa, which is slow on large binaries |
 | `--max-size SIZE` | `200MB` | Refuse larger files (`5000000`, `50MB`, `1G`); also the per-member extraction limit |
 | `--timeout SECONDS` | `60` | Per-analyzer time limit; a stopped analyzer is reported as TIMED OUT |
+| `--file-timeout SECONDS` | `900` | Time budget for the whole file, archive members included; checks and members still pending when it runs out are listed under Not checked and the verdict's confidence drops to low |
 | `--reputation` | off | Look up SHA256 hashes at MalwareBazaar, then VirusTotal (see below) |
 | `--max-lookups N` | `20` | Hashes looked up per run (file plus extracted members) |
 | `--hunt-days N` | `30` | Time window for the SIEM hunt queries |
@@ -129,18 +130,39 @@ when all parts are present, citing the exact evidence.
 
 | Pattern | Fires when | Severity |
 |---|---|---|
-| Reverse shell | capa: create reverse shell | HIGH |
-| Keystroke logging | capa: log keystrokes | HIGH |
+| Reverse shell | unsigned + capa: create reverse shell | HIGH |
+| Keystroke logging | unsigned + capa: log keystrokes | HIGH |
 | Collects files and uploads them | unsigned + enumerates files + sends files over HTTP | HIGH |
-| Shellcode-style API loading | no import table + walks loader structures or parses exports | HIGH |
-| Hidden strings and runtime-resolved APIs | unsigned + stack strings + many runtime-linked functions | HIGH |
+| Shellcode-style API loading | no or almost no imports + walks loader structures or parses exports | HIGH |
+| Hidden strings and runtime-resolved APIs | unsigned + stack strings + many runtime-linked functions or parses exports | HIGH |
 | Drops an embedded program | unsigned + embedded PE + extracts a resource + writes a file | MEDIUM |
 | Downloads and runs a file | unsigned + downloads + writes and runs or starts a process | MEDIUM |
 | Starts itself through a Run key | capa: persist via Run registry key | MEDIUM |
 | Deletes itself | capa: self delete | MEDIUM |
+| Obfuscated script that sets up persistence | script is obfuscated + scheduled task or Run key | HIGH |
+| Process-injection imports under an untrusted signature | signature fails verification + process-injection imports | HIGH |
+| Embedded program, with a YARA match | unsigned + embedded PE + any YARA match | HIGH |
+| Disk image hiding files next to programs | hidden files + programs, shortcuts or scripts in the image | HIGH |
+| Bypasses User Account Control | unsigned + capa: bypass UAC | HIGH |
+| .NET program that loads hidden code from itself | unsigned .NET + high-entropy code section (MEDIUM) + loads or invokes a .NET assembly | HIGH |
+| Finds Windows functions by hash | unsigned + capa: resolve function by ... hash | HIGH |
+| Script with a huge encoded line that reaches Windows | COM objects, commands or Execute/Eval + a line over 500,000 characters | HIGH |
+| Obfuscated batch file that reads itself | batch obfuscated (encodings or 50+ `%var:~n,m%` substrings) + refers to its own file (`%~f0`) | HIGH |
 
-"Unsigned" means a positive not-signed result. If the signature could not be checked,
-those patterns do not fire and the report says so. Patterns likely to match legitimate
+The five from "Process-injection imports" to "Bypasses User Account Control" were added
+after holdout set 1, and the last four after holdout set 2 (see
+[docs/validation.md](docs/validation.md)), from combinations seen on real samples the
+earlier rules had not been written against.
+
+Archives and disk images also get a cross-member check: a validly signed program shipped
+next to a DLL that calls shellcode (capa: execute shellcode via indirect call, plus RWX
+memory or an embedded PE) and is unsigned, fails verification or is signed by a different
+organization is reported as DLL side-loading (HIGH).
+
+"Unsigned" means a positive not-signed result, or a signature that fails verification
+(untrusted certificate, altered file), since that lends no trust. On a file with a valid
+signature these patterns are kept at LOW. If the signature could not be checked at all,
+they do not fire and the report says so. Patterns likely to match legitimate
 unsigned installers start at MEDIUM and are promoted only after the benign-corpus run.
 
 ## Hash reputation (opt-in)

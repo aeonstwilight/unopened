@@ -79,6 +79,7 @@ class PESpec:
     overlay: bytes = b""
     certificate: bytes | None = None  # raw bCertificate contents of a WIN_CERTIFICATE
     pdb_path: str | None = None
+    reproducible: bool = False  # add an IMAGE_DEBUG_TYPE_REPRO entry (needs pdb_path)
 
 
 def _build_rdata(spec: PESpec, rva: int, ptr_size: int) -> tuple[bytes, dict[str, tuple[int, int]]]:
@@ -127,8 +128,10 @@ def _build_rdata(spec: PESpec, rva: int, ptr_size: int) -> tuple[bytes, dict[str
         cv = b"RSDS" + bytes(16) + struct.pack("<I", 1) + spec.pdb_path.encode() + b"\0"
         cv_at = put(cv)
         dbg = struct.pack("<IIHHIIII", 0, spec.timestamp, 0, 0, 2, len(cv), cv_at, 0)
+        if spec.reproducible:
+            dbg += struct.pack("<IIHHIIII", 0, spec.timestamp, 0, 0, 16, 0, 0, 0)
         dbg_at = put(dbg)
-        dirs["debug"] = (dbg_at, 28)
+        dirs["debug"] = (dbg_at, len(dbg))
         dirs["_cv_rva"] = (cv_at, len(cv))
 
     if spec.rdata_extra:
