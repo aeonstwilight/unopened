@@ -173,6 +173,45 @@ combined it: an unsigned .NET program with an encrypted-looking `.text` section 
 8.0) that loads and invokes a .NET assembly from a resource, the usual crypter shape. It
 is a candidate for the set 2 fixes below.
 
+**Fixes after run 1.** A probe (`scripts/probe_shapes.py`, which prints only counts, hash
+prefixes and Office relationship types) measured the script and unrecognized members
+before any rule was written, and changed several first guesses:
+
+| Miss | What the probe showed | Fix |
+|---|---|---|
+| Two "PowerShell" scripts, name mismatch only | GuLoader VBScripts padded with comment lines full of PowerShell-looking words; scored as PowerShell and checked with the wrong rules | When the content also shows signs of the language the name says, the name decides |
+| 8.6 MB RemcosRAT JScript, "unrecognized binary data" | 17% non-ASCII bytes, valid UTF-8: padding with zero-width and private-use characters, which the text check counted as binary | Only control codes count against text |
+| RemcosRAT JScript, one line of 3,018,473 characters | ActiveX plus that line; LOW and MEDIUM only | A line over 500,000 characters is MEDIUM (jQuery, minified, is about 90,000); with COM objects, commands or Execute/Eval it is a HIGH pattern |
+| AsyncRAT batch file, 880 KB | 783 `%var:~n,m%` substrings spelling every command, and a reference to its own path | Batch variables are expanded as text (as cmd.exe would, never run); 50+ substrings is obfuscation; obfuscated plus `%~f0` is a HIGH pattern |
+| .NET RAT in a zip (`3b35d323…`) | See the regression check above | Unsigned .NET + MEDIUM-entropy code section + loads or invokes an assembly: HIGH pattern |
+| Native loader | capa: resolve function by Brute Ratel Badger hash | Unsigned + capa "resolve function by … hash": HIGH pattern |
+| ISO: Dropbox-signed EXE beside a DLL signed by an individual | The DLL allocates RWX memory, embeds a PE and calls shellcode | Cross-member check for DLL side-loading (HIGH) |
+| Word document named `.doc` | Its only external relationship is an ordinary hyperlink | None: a lure link for the reader to click, not content that loads on open. Documented |
+
+**Run 2, after these fixes: 18 of 31** (7 malicious, 11 suspicious). Every new
+detection came from the fix meant for it. The benign corpora then showed one fix was too
+broad: a pattern for VBScript that runs text it assembles (Execute or Eval plus Mid,
+StrReverse or Chr) made `slmgr.vbs` and `winrm.vbs` suspicious. Five of winrm's matches
+were `RegExp.Execute`, a method that runs a regular expression, and that keyword bug was
+fixed. The rest were real: both scripts run Eval or Execute on a variable. The probe then
+compared the two GuLoader samples with the two Microsoft scripts: Execute on a variable
+in all four, similar Chr and Mid counts; only the share of comment lines differed (41%
+and 69% against 4% and 6%). Four files are not enough to set a threshold on, so the
+pattern was removed.
+
+**Run 3, the final rules for this set (commit `1ed7743`): 16 of 31** (7 malicious, 9
+suspicious, 1 could not analyze, 14 no findings). Without the two repeated PDFs: 16 of
+29. These samples shaped the fixes, so this is a rerun, not a holdout result.
+
+| Remaining misses | Count | Why |
+|---|---|---|
+| GuLoader VBScripts | 2 | Identified correctly and their Execute is reported (MEDIUM), but no rule turns it into a verdict without also flagging Microsoft's own scripts |
+| .NET DLLs (RGBLoader) and a .NET program with an encrypted-looking code section but no assembly loading | 4 | Only LOW signals: HTTP, geolocation, screenshots, hidden windows, resource access. No combination specific enough to write from these samples |
+| Native loaders | 3 | RC4 plus PE parsing (two), or writes and runs a file and references the Startup folder (one); each signal is common in installers |
+| Macro workbooks | 2 | Macros plus suspicious functions (two MEDIUMs); no auto-run trigger was found |
+| Lure documents | 3 | Two link-only PDFs (also in set 1) and a Word document whose only external link is a hyperlink |
+| Password-protected PDF | 1 | Correctly "could not analyze": the password is not known |
+
 ## Results: benign corpus
 
 201 files: the Sysinternals Suite (Microsoft-signed admin tools that read process memory,
@@ -185,6 +224,7 @@ fewer than 5% of files.
 | 1. After the RPISEC fixes and behavior patterns | 4 | 62 | **32.8%** (66 of 201) |
 | 2. After the fixes below | 0 | 1 | **0.5%** (1 of 201) |
 | 3. After the holdout fixes (new patterns, failed-signature rule, script and OPC identification, time budget) | 0 | 1 | **0.5%** (1 of 201) |
+| 4. After the corpus 2 and holdout set 2 fixes | 0 | 0 | **0.0%** (0 of 201), see below |
 
 **Run 1 failed the target badly.** Diagnostics on 13 representative files found four
 causes:
@@ -218,6 +258,13 @@ cleanup after it, where run 2's slowest took 1,356 s. The run was interrupted on
 crash of the Python process (a bus error, with disk and memory to spare) after 187 files
 and resumed with `--resume`; the remaining files completed normally, including the one it
 was working on.
+
+**Run 4, after the corpus 2 and holdout set 2 fixes (October 14–15): 0 of 201**, but
+read it as 0.5%. ZoomIt64, the false positive in runs 2 and 3, came back clean only
+because capa hit its 300-second limit on it (run 3: 295 s and suspicious; run 4: 306 s,
+timed out, "no findings", with the timeout listed under not checked). When capa finishes,
+the same three MEDIUM findings are expected. None of the holdout set 2 patterns or the
+side-loading check fired on this corpus.
 
 **Run 2 met the target**: no malicious verdicts and one suspicious file. The remaining
 false positive is ZoomIt64, where three MEDIUM heuristics stack up (V-SUS-04). It is left
@@ -273,6 +320,8 @@ It also found two parser problems that a clean verdict had hidden:
 | 1. First run | 3 | 4 | **4.8%** (7 of 146) |
 | 2. After the fixes above | 1 | 1 | **1.4%** (2 of 146) |
 | 3. After two more | 0 | 1 | **0.7%** (1 of 146) |
+| 4. After the holdout set 2 fixes | 0 | 3 | **2.1%** (3 of 146) |
+| 5. After removing the VBScript pattern | pending | pending | pending |
 
 **Run 2** cleared five of the seven and both parser problems. `slmgr.vbs` was still
 malicious, for two reasons found by printing its matching lines: it uses `ADODB.Stream`
@@ -288,6 +337,10 @@ workbook that creates a folder when it opens. Its macro runs automatically on op
 deserves a look, so it is left as found. In the other direction, these fixes make the
 tool stricter about what counts as malicious; they were checked against the synthetic
 malicious fixtures, and a holdout rerun against them is listed under what remains.
+
+**Run 4, after the holdout set 2 fixes: 3 suspicious.** The macro workbook as before, and
+`slmgr.vbs` and `winrm.vbs` through the VBScript pattern described under holdout set 2,
+which was then removed. **Run 5** is in progress; its result will be recorded here.
 
 The VM stalled twice during run 3 and killed the run while it was writing a row, which
 exposed a harness bug: `--resume` failed on the cut-off line. Fixed, with a test; the run
@@ -312,12 +365,15 @@ was resumed and completed.
 
 ## What remains
 
-- **Holdout rerun against the corpus 2 fixes.** Those fixes judge scripts and macros more
-  strictly (obfuscation by shape, downloading only with a web request, malicious macros
-  only with run or fetch functions). The holdout's scripts and Office files should be run
-  again to confirm no detection was lost.
-- **A fresh holdout set.** The 30 samples above shaped the fixes, so they no longer
-  measure detection on unseen malware. A new set, picked the same way, would.
-- **Known limitations, documented rather than fixed:** link-only PDF lures, MSI contents,
-  macro workbooks without auto-run that use suspicious functions, and large scripts whose
-  only signal is a single `eval`.
+- **A third holdout set.** Sets 1 and 2 both shaped fixes, so neither measures unseen
+  malware any more. Set 2's first run (8 of 31) is the most recent honest number.
+- **Compiled loaders.** Most remaining misses are .NET and native programs whose static
+  signals are each common in legitimate software. Patterns for them need more samples
+  than one set provides, checked against both benign corpora.
+- **capa timeouts.** capa stopped at 300 s on 17 corpus 1 files in run 4, and the
+  verdict on at least one (ZoomIt64) depends on whether it finishes. A longer limit for
+  validation runs, or a cheaper capa configuration, would make runs repeatable.
+- **Known limitations, documented rather than fixed:** link-only PDF lures and lure
+  documents with only hyperlinks, MSI contents, macro workbooks without auto-run that use
+  suspicious functions, VBScript loaders that hide code behind Execute, and large scripts
+  whose only signal is a single `eval`.
