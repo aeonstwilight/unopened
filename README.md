@@ -1,11 +1,78 @@
 # unopened
 
-Static triage of a suspicious file for SOC analysts who are not reverse engineers.
-Give it one file; it writes one plain-language report answering: what is this file, what
-can it do, which indicators can I pivot on, and what was *not* checked.
+Static triage of a suspicious file, for SOC analysts who are not reverse engineers.
 
-The file is never executed, opened in its native application, or rendered. Every check
-reads its bytes and nothing more.
+A user reports an attachment. Before anyone opens it, the analyst needs four answers:
+what is this file, what can it do, what can I search for across the environment, and how
+sure is the verdict. unopened reads the file's bytes, never runs or opens it, and writes
+one plain-language report that answers those questions, ready to paste into a ticket. It
+is just as explicit about what it did **not** check, so a skipped check never passes for
+a clean result.
+
+## What a report looks like
+
+The top of the report for a synthetic test shortcut (built by `tests/fixtures/lnk.py`;
+its "payload" is `Write-Host fixture`), named to look like a PDF invoice:
+
+```text
+| Verdict    | MALICIOUS (high confidence, rule V-MAL-03) |
+| File type  | Windows shortcut (LNK)                      |
+
+## Verdict
+- V-MAL-03 (malicious): A shortcut launches a scripting or download tool (LOLBin) with an
+  encoded, hidden, padded or URL-bearing command, or carries an appended program.
+  - Shortcut launches powershell.exe
+  - Encoded PowerShell command
+  - Command asks for a hidden window
+
+## Key findings
+- [HIGH] File name does not match content: Double extension: the name looks like a .pdf
+  file but the real extension is .lnk. Windows hides known extensions by default, so
+  users see only the decoy.
+- [HIGH] Shortcut launches powershell.exe
+- [HIGH] Encoded PowerShell command: ... Decoded (shown as text, not run): Write-Host fixture
+- [MEDIUM] Shortcut borrows another program's icon: It launches powershell.exe but shows
+  the icon of msedge.exe, so it looks like a different kind of file.
+- [MEDIUM] Command asks for a hidden window
+```
+
+The full report continues with the file's identity and hashes, a section per analyzer,
+every indicator (defanged), what was not checked, and ready-to-run hunt queries for
+Splunk, Microsoft Sentinel and Elastic. The same results are available as JSON.
+
+**Handles:** Windows programs (EXE, DLL), Office documents (legacy and OOXML, with
+macros), shortcuts (LNK), PowerShell, JavaScript, VBScript and batch scripts, PDFs, and
+ZIP, 7z and ISO containers, whose members are triaged recursively within strict limits.
+
+## How well it works
+
+Measured on real files in an isolated analysis VM. The method, every run, every miss and
+every false positive are in **[docs/validation.md](docs/validation.md)**.
+
+| Measure | Result |
+|---|---|
+| Unseen malware: two sets of about 30 current MalwareBazaar samples, first run with the rules frozen beforehand | Expected verdict on **11 of 30**, then **8 of 31** |
+| The second set again, after fixing what it exposed | 16 of 31 |
+| False positives, benign corpus 1 (201 signed Windows tools, Python, 7-Zip, PuTTY) | 0 malicious; suspicious on about 0.5% |
+| False positives, benign corpus 2 (146 Office files with macros, PDFs, scripts, shortcuts, installers) | 0 malicious; suspicious on 0.7% |
+
+The first-run number is the honest one, and it is modest on purpose: static triage
+catches lures, droppers, scripts and shortcuts well, and misses compiled loaders whose
+individual signals all look like ordinary software. The validation document explains
+each miss rather than tuning it away, and records one rule that was added and then
+removed because it flagged Microsoft's own scripts.
+
+## Quick start
+
+```sh
+python -m venv .venv && . .venv/bin/activate
+pip install -e ".[all]"
+unopened triage suspicious.bin                              # Markdown report
+unopened triage suspicious.bin --format both --out reports/ # Markdown and JSON
+```
+
+For capa and YARA, point the tool at your own rules (see [Rules](#rules)). Run it on
+real malware only inside an isolated analysis VM.
 
 ## Safety guarantees
 
@@ -206,6 +273,12 @@ done.
 The outputs hold labels and rule IDs, never raw indicators; `--keep-reports` also keeps
 the full JSON reports, which do contain raw values under `raw` keys.
 
+Two diagnostics are safe to copy out of the VM. `scripts/miss_details.py DIR` prints, for
+each missed sample, its findings, capa capabilities and indicator counts, but no
+indicator values or names. `scripts/probe_shapes.py FILE...` counts text-shape features
+(encodings, obfuscation forms, line statistics) in scripts and unrecognized files, so a
+rule can be written from measurements rather than guesses.
+
 ## Hunt queries
 
 Every report ends with ready-made searches for the file's hashes and names (including
@@ -243,11 +316,11 @@ rules, in order, are in [docs/verdict-rules.md](docs/verdict-rules.md), generate
 Archives, disk images and PDFs take the most severe verdict among their own findings and
 their members.
 
-## What this version checks (milestones 1 to 4)
+## What it checks
 
 | Step | What it does |
 |---|---|
-| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), ZIP, LNK, PDF, 7z, ISO, PowerShell/JavaScript/VBScript/batch (heuristic), text. Flags extension mismatches (HIGH when a program wears a document, image or archive extension; LOW for storage names like `.bin` or `.malware`), double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
+| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), ZIP, LNK, PDF, 7z, ISO, PowerShell/JavaScript/VBScript/batch (content heuristics; when the content is inconclusive or also fits the language the name says, the name decides, since that is what Windows will run it with), text, including UTF-16 without a byte-order mark. Flags extension mismatches (HIGH when a program wears a document, image or archive extension; LOW for storage names like `.bin` or `.malware`), double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
 | Hashes | MD5, SHA1, SHA256; imphash for PE; TLSH when `py-tlsh` is installed. |
 | PE | Headers, compile timestamp (zeroed, future, implausible, Delphi default), sections with entropy and permissions, packer section names, W+X sections, entry point placement, imports grouped by behavior (`data/pe_imports.toml`), exports, PDB path, overlay, truncation, .NET detection, parser anomalies. |
 | Authenticode | Signature presence and validity (offline, against the Microsoft root list bundled with signify), signer, issuer and timestamp. Revocation is not checked. |
@@ -257,7 +330,7 @@ their members.
 | Office (OLE and OOXML) | VBA macros (module source), auto-run triggers, suspicious keywords, VBA stomping, Excel 4.0 (XLM) macro sheets, embedded OLE packages (with file names), ActiveX parts, DDE fields, and external relationships such as remote template injection. Legacy files get a subtype (Word/Excel/PowerPoint/MSI/MSG) for extension checks. |
 | LNK | Target, arguments, working directory, icon, comment and window style. Flags LOLBin targets and arguments (`data/lolbins.toml`, editable), encoded PowerShell (decoded as text for display only), hidden windows, whitespace padding, borrowed icons, network targets, and data appended after the shortcut. |
 | Archives and disk images | ZIP (plain, ZipCrypto, AES), 7z (including encrypted headers) and ISO (Joliet, Rock Ridge, UDF, ISO 9660). Tries no password, then `infected`, then any `--archive-password`. Each member is triaged recursively with the full pipeline. Flags path-traversal and deceptive names, hidden files in images, shortcuts next to hidden files, programs inside archives, unknown passwords, decompression bombs and limits reached. |
-| Scripts | PowerShell, JavaScript/JScript, VBScript and batch. Deobfuscation by text transformation only (base64 including `-EncodedCommand`, character codes, string concatenation), repeated up to five rounds. Keywords per language from `data/script_keywords.toml` (editable), plus a combined "downloads and runs code" finding. Decoded text feeds the indicator list. |
+| Scripts | PowerShell, JavaScript/JScript, VBScript and batch. Deobfuscation by text transformation only (base64 including `-EncodedCommand`, character codes, string concatenation), repeated up to five rounds. Batch variable references (`%v%`, `%v:~n,m%`) are expanded the way cmd.exe would, as text. Keywords per language from `data/script_keywords.toml` (editable), plus a combined "downloads and runs code" finding. Obfuscation is judged by shape (chained char codes, joined literals, variable substrings), not by counting single calls. Decoded text feeds the indicator list. |
 | PDF | Raw keyword counts with `#xx`-escaped names decoded (and flagged), then JavaScript source with its trigger (OpenAction, /AA), Launch actions, URIs, XFA and rich media. Attachments are extracted within the limits and triaged recursively. |
 
 Not in this version (always listed under **Not checked** in the report): FLOSS-decoded

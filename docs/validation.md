@@ -4,6 +4,25 @@ How unopened performs on real files, measured with `scripts/validate.py` (milest
 Every number below comes from a run of that script; the method is described first so the
 numbers can be reproduced and challenged.
 
+## Results at a glance
+
+| Test | What it measures | Result |
+|---|---|---|
+| Holdout set 1, first run | Detection on 30 current samples the rules had not seen | **11 of 30** |
+| Holdout set 2, first run | The same, on a fresh set after fixing set 1's gaps | **8 of 31** |
+| Holdout set 2, final rerun | Whether the fixes do what they were written for (not unseen any more) | 16 of 31 |
+| Benign corpus 1, 201 files | False positives on signed Windows tools and installers | 0 malicious, suspicious on about 0.5% |
+| Benign corpus 2, 146 files | False positives on documents, macros, PDFs, scripts, shortcuts, installers | 0 malicious, suspicious on 0.7% |
+| RPISEC course labs, 16 scored samples | Coverage against published write-ups (rules written while looking at them) | 12 of 16 verdicts, 80% of behaviors |
+
+The first runs on the holdout sets are the honest detection numbers: the rules were
+frozen by commit before each run, and nothing was tuned until the result was recorded.
+Every later run is labeled as a rerun. Where the tool is strong and where it is weak
+follows from the misses: lures with a payload in view (shortcuts, scripts, macros that
+run on open, disk images, side-loading kits) are caught; compiled loaders whose
+individual signals all look like ordinary software are mostly missed, and so are lure
+documents whose only content is a link.
+
 ## Method
 
 - **Where it ran.** A REMnux virtual machine with no network during triage, no shared
@@ -26,7 +45,8 @@ numbers can be reproduced and challenged.
 | RPISEC Malware course labs | 17 PE samples in 9 zipped labs | Each lab's `solution.md` ([RPISEC/Malware](https://github.com/RPISEC/Malware), credited in `validation/rpisec-labs.csv`) |
 | Benign corpus 1 | 201 files | Ordinary Windows software: Sysinternals Suite, the Python 3.12 embeddable build, the 7-Zip 24.08 installer, PuTTY |
 | Benign corpus 2 | 146 files (plus their contents) | Everything corpus 1 lacked: Office files including five with macros written for the test, IRS fill-in PDFs, PowerShell Gallery modules, JavaScript libraries, Windows' own VBScript and batch files, Start-menu shortcuts, and installers fetched with winget |
-| Current samples (holdout) | 30 MalwareBazaar samples, 13 file types | MalwareBazaar tags; samples the rules were not written against |
+| Holdout set 1 | 30 MalwareBazaar samples, 13 file types (October 2026) | MalwareBazaar tags; samples the rules were not written against |
+| Holdout set 2 | 30 MalwareBazaar samples (31 scored), picked the same way two days later | The same |
 
 ## Results: RPISEC labs
 
@@ -79,9 +99,9 @@ optimistic by construction. The benign corpus measures false positives, and the 
 set measures detection on samples the rules have never seen. Both belong next to these
 numbers.
 
-## Results: holdout (MalwareBazaar)
+## Results: holdout set 1 (MalwareBazaar)
 
-The most honest number in this document. Thirty current samples, the newest on
+The first test on samples the rules had not seen. Thirty current samples, the newest on
 MalwareBazaar for each file type at the time of download (October 2026), picked by type and
 date rather than by how the tool did on them. The rules were frozen at commit `705b676`
 before the run, and nothing was tuned until this first result was recorded. Hashes and tags
@@ -117,7 +137,7 @@ capabilities and indicator counts but no indicator values.
 | 1 ISO | 12 programs and 16 hidden files: Microsoft-signed DLLs beside a DLL from an untrusted signer that bypasses UAC | **Fixed**: new patterns for the image layout and the UAC bypass; reproducible-build timestamps on the signed DLLs no longer count as forged |
 | 1 tiny EXE | One import, walks the PEB, stack strings, resolves functions from exports | **Fixed**: the shellcode and hidden-API patterns now accept an almost empty import table and export parsing |
 | 2 MSI installers | No findings, and the report did not say MSI contents go unexamined | **Fixed (reporting)**: listed under Not checked, confidence low. MSI analysis itself is out of scope for version 1 |
-| 2 Excel .xls | VBA macros using suspicious functions, no auto-run trigger | **Open**: legitimate macro workbooks use the same functions; needs the second benign corpus, which has macro documents, before any rule |
+| 2 Excel .xls | VBA macros using suspicious functions, no auto-run trigger | **Open**: legitimate macro workbooks use the same functions. Benign corpus 2 now has macro workbooks, and still no rule separates the two; the same shape recurs in holdout set 2 |
 | 3 PDFs | Links only, no JavaScript, actions or attachments | **Limitation**: a link-only lure looks like an ordinary document to static analysis. The links are in the indicators for pivoting |
 | 1 JavaScript | Only a LOW `eval` finding on a large file | **Limitation** for now: the deobfuscator handles base64, char codes and concatenation, not this |
 | 1 7z | A 15 MB archive declaring a single 961 MB program (file pumping, padding to get past scanner size limits); refused by the per-member limit and reported only as could not analyze | **Fixed**: a program declared past the limit at 20 times or more its compressed size is a HIGH finding, since the padding is itself the evidence |
@@ -128,16 +148,11 @@ open or documents: the three link-only PDFs, the two MSI installers (now reporte
 examined), the two macro workbooks, and two scripts (a batch file and a JavaScript file)
 that are now analyzed as scripts but show nothing that reaches the threshold.
 
-Read run 2 with two cautions. These samples shaped the fixes, so it measures whether the
-fixes do what they were written to do, not how the tool does on new malware; that takes a
-fresh holdout set. And the new patterns have not yet been run against the benign corpus,
-so their false-positive cost is unmeasured until they are.
-
-Each fix has a synthetic regression test (`tests/test_holdout_fixes.py`,
-`tests/test_behaviors.py`, `tests/test_pe.py`). Run 2 will be reported next to run 1, not
-in its place, and it is no longer a holdout: these samples shaped the fixes. A fresh
-holdout set is the honest check of them. The fixes were checked against the benign corpus
-in run 3 below: no new false positives.
+Run 2 is not a holdout result: these samples shaped the fixes, so it measures whether the
+fixes do what they were written to do, not how the tool does on new malware. Holdout set
+2 below is that check. The fixes were run against benign corpus 1 (its run 3) with no new
+false positives. Each fix has a synthetic regression test (`tests/test_holdout_fixes.py`,
+`tests/test_behaviors.py`, `tests/test_pe.py`).
 
 Runtime: median 7.2 s per file, slowest 908 s (an ISO stopped by the 900-second file
 budget, its first real use), 50 minutes in total. capa timed out on 4 files.
@@ -212,7 +227,7 @@ suspicious, 1 could not analyze, 14 no findings). Without the two repeated PDFs:
 | Lure documents | 3 | Two link-only PDFs (also in set 1) and a Word document whose only external link is a hyperlink |
 | Password-protected PDF | 1 | Correctly "could not analyze": the password is not known |
 
-## Results: benign corpus
+## Results: benign corpus 1
 
 201 files: the Sysinternals Suite (Microsoft-signed admin tools that read process memory,
 adjust privileges and manage services by design), the Python 3.12 embeddable build, the
@@ -249,6 +264,10 @@ causes:
    detects .NET single-file bundles on RDCMan. A lone HIGH YARA match on a file with a
    valid signature is now MEDIUM, with a note that certificates can be stolen.
 
+**Run 2 met the target**: no malicious verdicts and one suspicious file. The remaining
+false positive is ZoomIt64, where three MEDIUM heuristics stack up (V-SUS-04). It is left
+as found rather than tuned away.
+
 **Run 3 repeated the corpus after the holdout fixes** (October 12, corpus rebuilt from the
 same sources: the Sysinternals Suite as published that day, the Python 3.12.7 embeddable
 build, 7-Zip 24.08, PuTTY). Same result: 0 malicious, 1 suspicious, the same ZoomIt64. The
@@ -266,20 +285,15 @@ timed out, "no findings", with the timeout listed under not checked). When capa 
 the same three MEDIUM findings are expected. None of the holdout set 2 patterns or the
 side-loading check fired on this corpus.
 
-**Run 2 met the target**: no malicious verdicts and one suspicious file. The remaining
-false positive is ZoomIt64, where three MEDIUM heuristics stack up (V-SUS-04). It is left
-as found rather than tuned away.
+Read these numbers with three limits in mind:
 
-Read this number with three limits in mind:
-
-- **The fixes were made against this corpus**, so run 2 is optimistic in the same way the
-  RPISEC numbers are. A second, different benign set is needed before it is a general
-  claim.
-- **capa hit its 5-minute limit on 15 files**, so behavior patterns that rely on capa
-  could not fire there. The true rate on those files is unmeasured, not zero.
-- **The corpus is mostly signed Windows tools.** It has one unsigned installer (7-Zip),
-  no documents, scripts or shortcuts. The dropper pattern stays at MEDIUM: one unsigned
-  installer is not enough evidence to promote it.
+- **The run 1 fixes were made against this corpus**, so later runs are optimistic in the
+  same way the RPISEC numbers are. Benign corpus 2 below is the independent check.
+- **capa hit its 5-minute limit on 15 to 17 files per run**, so behavior patterns that rely
+  on capa could not fire there. The true rate on those files is unmeasured, not zero.
+- **The corpus is mostly signed Windows tools**, with one unsigned installer (7-Zip). The
+  dropper pattern stays at MEDIUM: one unsigned installer is not enough evidence to
+  promote it. Corpus 2 covers documents, scripts, shortcuts and more installers.
 
 ## Results: benign corpus 2
 
@@ -335,18 +349,31 @@ have regression tests.
 **Run 3 met the target**: no malicious verdicts and one suspicious file, the test
 workbook that creates a folder when it opens. Its macro runs automatically on open, which
 deserves a look, so it is left as found. In the other direction, these fixes make the
-tool stricter about what counts as malicious; they were checked against the synthetic
-malicious fixtures, and a holdout rerun against them is listed under what remains.
+tool stricter about what counts as malicious. The regression check under holdout set 2
+measured the cost: one detection, which had rested on a weak signal.
 
 **Run 4, after the holdout set 2 fixes: 3 suspicious.** The macro workbook as before, and
 `slmgr.vbs` and `winrm.vbs` through the VBScript pattern described under holdout set 2,
-which was then removed. **Run 5, after removing it (commit `ac45ee5`): 0 malicious, 1 suspicious (0.7%)**, the macro workbook that runs on open, back to the run 3 result. capa timed out on 3 files.
+which was then removed. **Run 5, after removing it (commit `ac45ee5`): 0 malicious,
+1 suspicious (0.7%)**: the macro workbook that runs on open, back to the run 3 result.
+capa timed out on 3 files.
 
 The VM stalled twice during run 3 and killed the run while it was writing a row, which
 exposed a harness bug: `--resume` failed on the cut-off line. Fixed, with a test; the run
 was resumed and completed.
 
 ## Runtime
+
+Per file triaged, an archive counting once with its members; capa included.
+
+| Set (latest run) | Median | Slowest | capa timeouts |
+|---|---|---|---|
+| Holdout set 2, run 3 | 6.8 s | 675 s | |
+| Benign corpus 1, run 4 (one job in a 2-CPU VM) | 72.1 s | 901 s (the file budget) | 17 |
+| Benign corpus 2, run 5 | 2.3 s | 621 s | 3 |
+
+capa accounts for nearly all of the time on programs; scripts, documents and shortcuts
+take a second or two.
 
 - RPISEC labs, run 4: median 45.7 s per zipped lab (up to three samples each, capa
   included), slowest 94.4 s.
