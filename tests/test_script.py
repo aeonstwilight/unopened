@@ -132,3 +132,13 @@ def test_char_code_run_that_is_not_text_is_not_obfuscation(make_file, body):
 def test_char_code_run_that_spells_text_is_obfuscation(make_file, code):
     r = analyze(make_file("a.vbs", b"s = " + code + b"\n"))
     assert "script.obfuscated" in ids(r)
+
+
+def test_regexp_execute_method_is_not_running_code(make_file):
+    # M5 corpus 2: winrm.vbs calls regExpObj.Execute(target) to match a pattern.
+    from unopened import pipeline
+    from unopened.analyzers import Options
+    vbs = ('Dim re, m\r\nSet re = New RegExp\r\nre.Pattern = "a+"\r\n'
+           'Set m = re.Execute("aaa")\r\nSet m = re . Execute(x)\r\n')
+    r = pipeline.triage(make_file("match.vbs", vbs.encode()), Options(hunt=False))
+    assert "script.vbs.execute" not in {f.id for f in r.findings()}

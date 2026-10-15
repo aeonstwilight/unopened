@@ -58,6 +58,16 @@ SHAPES: dict[str, str] = {
     "js_hex_escape": r"\\x[0-9a-fA-F]{2}",
     "js_unicode_escape": r"\\u[0-9a-fA-F]{4}",
     "vb_execute": r"(?i)\bExecute(?:Global)?\b|\bEval\s*\(",
+    # How Execute/Eval is written: as a method of an object (RegExp.Execute), on a single
+    # variable, or on the result of a string function.
+    "vb_execute_method": r"(?i)\.\s*Execute\s*\(",
+    "vb_execute_on_variable": (r"(?im)(?<![.\w])(?:Execute(?:Global)?|Eval)"
+                               r"\s*\(?\s*[A-Za-z_]\w*\s*\)?\s*$"),
+    "vb_execute_on_function": (r"(?i)(?<![.\w])(?:Execute(?:Global)?|Eval)\s*\(?\s*"
+                               r"(?:Mid|Chr|ChrW|Replace|StrReverse|Join|Split|Left|Right)"
+                               r"\$?\s*\("),
+    "vb_execute_on_literal": r"""(?i)(?<![.\w])(?:Execute(?:Global)?|Eval)\s*\(?\s*["]""",
+    "vb_execute_on_concat": r"(?i)(?<![.\w])(?:Execute(?:Global)?|Eval)\s*\(?[^\r\n]*&",
     "vb_replace": r"(?i)\bReplace\s*\(",
     "vb_chr": r"(?i)\bChrW?\$?\s*\(",
     "vb_strreverse": r"(?i)\bStrReverse\b",
@@ -109,6 +119,12 @@ def text_stats(text: str) -> dict[str, Any]:
         "longest_line": max(len(x) for x in lines),
         "lines_over_1k": sum(1 for x in lines if len(x) > 1000),
         "non_ascii_chars": round(non_ascii / max(len(text), 1), 3),
+        "comment_line_share": round(
+            sum(1 for x in lines if re.match(r"\s*(?:'|rem\s|::|//|#)", x, re.I))
+            / max(len(lines), 1), 3),
+        "blank_line_share": round(sum(1 for x in lines if not x.strip()) / max(len(lines), 1),
+                                  3),
+        "distinct_line_share": round(len(set(lines)) / max(len(lines), 1), 3),
     }
     for key, rx in COMPILED.items():
         n = sum(1 for _ in rx.finditer(text))

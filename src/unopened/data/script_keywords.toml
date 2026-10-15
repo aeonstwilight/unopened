@@ -139,7 +139,9 @@ tags = ["file_write"]
 id = "vbs.execute"
 # Statement form (Execute expr) as well as the call form. M5 holdout set 2: GuLoader runs
 # Execute on a string built with Mid, with no parenthesis or quote after the keyword.
-pattern = '(?im)\b(?:Execute|ExecuteGlobal|Eval)\b\s*[\("]|(?:^|:|\bThen)[ \t]*(?:Execute|ExecuteGlobal)[ \t]+[^\s=]'
+# A method call is not: RegExp.Execute(text) runs a regular expression (M5 corpus 2:
+# winrm.vbs calls it five times).
+pattern = '(?im)(?<![.\w])(?<!\.\s)(?:Execute|ExecuteGlobal|Eval)\b\s*[\("]|(?:^|:|\bThen)[ \t]*(?:Execute|ExecuteGlobal)[ \t]+[^\s=]'
 severity = "medium"
 title = "Runs text as code (Execute/Eval)"
 tags = ["execute"]
