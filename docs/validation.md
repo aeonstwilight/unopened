@@ -83,7 +83,7 @@ numbers.
 
 The most honest number in this document. Thirty current samples, the newest on
 MalwareBazaar for each file type at the time of download (October 2026), picked by type and
-date rather than by how the tool did on them. The rules were frozen at commit `0c57e61`
+date rather than by how the tool did on them. The rules were frozen at commit `705b676`
 before the run, and nothing was tuned until this first result was recorded. Hashes and tags
 are in `validation/holdout-malwarebazaar.csv`. One sample, a 7z, is locked with a password
 named in its tags (5733); an analyst would have it from the delivery email, so it was
@@ -146,7 +146,7 @@ budget, its first real use), 50 minutes in total. capa timed out on 4 files.
 
 A fresh set, because the first holdout shaped the fixes above and no longer measures
 unseen malware. Picked the same way on October 14: the newest samples per file type.
-Rules frozen at commit `cd45981`, after every fix in this document. Hashes and tags are
+Rules frozen at commit `379fa9c`, after every fix in this document. Hashes and tags are
 in `validation/holdout2-malwarebazaar.csv`. Two PDFs were also in set 1 (few new PDFs had
 been uploaded in between); they are marked in the notes. One zip contained a second
 sample that is also listed, so 30 downloads gave 31 scored samples.
@@ -159,7 +159,7 @@ That is lower than set 1's first run (11 of 30), on a different mix: set 2 has m
 compiled programs and loaders, and the misses are mostly EXEs and DLLs.
 
 **Regression check: did the corpus 2 fixes cost detection?** The same 31 samples were run
-on the rules as they stood before the corpus 2 fixes (commit `5cc78aa`): **9 of 31**, one
+on the rules as they stood before the corpus 2 fixes (commit `0f4e6ba`): **9 of 31**, one
 more than the current rules. The other 30 results are identical, so the stricter script
 and macro rules did not lose any of this set's scripts or Office files.
 
@@ -199,7 +199,7 @@ in all four, similar Chr and Mid counts; only the share of comment lines differe
 and 69% against 4% and 6%). Four files are not enough to set a threshold on, so the
 pattern was removed.
 
-**Run 3, the final rules for this set (commit `1ed7743`): 16 of 31** (7 malicious, 9
+**Run 3, the final rules for this set (commit `ac45ee5`): 16 of 31** (7 malicious, 9
 suspicious, 1 could not analyze, 14 no findings). Without the two repeated PDFs: 16 of
 29. These samples shaped the fixes, so this is a rerun, not a holdout result.
 
@@ -340,7 +340,7 @@ malicious fixtures, and a holdout rerun against them is listed under what remain
 
 **Run 4, after the holdout set 2 fixes: 3 suspicious.** The macro workbook as before, and
 `slmgr.vbs` and `winrm.vbs` through the VBScript pattern described under holdout set 2,
-which was then removed. **Run 5, after removing it (commit `1ed7743`): 0 malicious, 1 suspicious (0.7%)**, the macro workbook that runs on open, back to the run 3 result. capa timed out on 3 files.
+which was then removed. **Run 5, after removing it (commit `ac45ee5`): 0 malicious, 1 suspicious (0.7%)**, the macro workbook that runs on open, back to the run 3 result. capa timed out on 3 files.
 
 The VM stalled twice during run 3 and killed the run while it was writing a row, which
 exposed a harness bug: `--resume` failed on the cut-off line. Fixed, with a test; the run
