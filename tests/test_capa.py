@@ -79,3 +79,85 @@ def test_no_workspace_written_next_to_sample(make_file, fixtures):
     path = make_file("s.exe", fixtures.suspicious_exe())
     run(path)
     assert sorted(p.name for p in path.parent.iterdir()) == ["s.exe"]
+
+
+# M6: rule cache and the file-scope fallback --------------------------------------------
+
+def _slow_viv(monkeypatch, also_pefile=False):
+    """Make full (vivisect) analysis hang so the timeout and fallback paths run."""
+    import time
+
+    import capa.loader
+
+    real = capa.loader.get_extractor
+
+    def slow(path, fmt, os_, backend, *args, **kwargs):
+        if backend == capa.loader.BACKEND_VIV or also_pefile:
+            time.sleep(60)
+        return real(path, fmt, os_, backend, *args, **kwargs)
+
+    monkeypatch.setattr(capa.loader, "get_extractor", slow)
+
+
+def run_with(path, **timeouts):
+    analyzer = next(a for a in registry() if a.name == "capa")
+    opts = Options(capa_rules=RULES, timeouts={"capa": 300.0, "capa_file_scope": 60.0,
+                                               **timeouts})
+    return runner.run_analyzer(analyzer, Context(path, identify(path), opts,
+                                                 path.stat().st_size))
+
+
+def test_timeout_falls_back_to_file_scope_rules(make_file, fixtures, monkeypatch):
+    _slow_viv(monkeypatch)
+    r = run_with(make_file("s.exe", fixtures.suspicious_exe()), capa=1.0)
+    assert r.status == Status.PARTIAL
+    assert r.data["fallback"] == "capa_file_scope" and r.data["file_scope_only"]
+    assert r.data["backend"] == "pefile"
+    # the fixture rule is file-scoped (imports), so the fallback still finds it
+    assert [c["namespace"] for c in r.data["capabilities"]] == ["host-interaction/process/inject"]
+    assert "timed out" in r.message or "did not finish" in r.message
+    assert r.errors[0].startswith("full analysis")
+    assert any("Function-level capabilities" in n for n in r.not_checked)
+    assert {f.source for f in r.findings} == {"capa"}
+
+
+def test_fallback_failure_is_still_a_timeout(make_file, fixtures, monkeypatch):
+    _slow_viv(monkeypatch, also_pefile=True)
+    r = run_with(make_file("s.exe", fixtures.suspicious_exe()), capa=1.0, capa_file_scope=1.0)
+    assert r.status == Status.TIMEOUT
+    assert "fallback also failed" in r.message
+
+
+def test_rule_cache_is_reused(tmp_path, monkeypatch):
+    import capa.rules
+
+    from unopened.analyzers.capa_analyzer import load_rules
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    first = load_rules(RULES)
+    calls = []
+    real = capa.rules.Rule.from_yaml
+    monkeypatch.setattr(capa.rules.Rule, "from_yaml",
+                        staticmethod(lambda *a, **k: calls.append(1) or real(*a, **k)))
+    second = load_rules(RULES)
+    assert calls == []  # loaded from the cache, not re-parsed
+    assert sorted(second.rules) == sorted(first.rules)
+
+
+def test_unwritable_rule_cache_is_not_an_error(tmp_path, monkeypatch):
+    import capa.rules.cache
+
+    from unopened.analyzers.capa_analyzer import load_rules
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    real = capa.rules.cache.cache_ruleset
+    state = {"first": True}
+
+    def refuse_once(cache_dir, ruleset):
+        if state.pop("first", False):
+            raise PermissionError("read-only cache directory")
+        return real(cache_dir, ruleset)
+
+    monkeypatch.setattr(capa.rules.cache, "cache_ruleset", refuse_once)
+    rules = load_rules(RULES)
+    assert rules.rules  # parsed despite the cache failure

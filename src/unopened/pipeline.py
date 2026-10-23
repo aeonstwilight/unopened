@@ -38,9 +38,9 @@ from .verdict import evaluate
 
 # Checks the project will do but this version does not, by file kind. Listed under
 # "Not checked" so that an absent check is never mistaken for a clean result.
-ALWAYS_PLANNED = [
-    ("Decoded and stack strings (FLOSS)", "not run; only plain ASCII/UTF-16LE strings were read"),
-]
+# (Decoded and stack strings are now the floss analyzer's job; when it cannot run on a
+# PE file, the runner reports it like any other analyzer.)
+ALWAYS_PLANNED: list[tuple[str, str]] = []
 REPUTATION_OFF = NotChecked(
     "Hash reputation lookup",
     "off; rerun with --reputation to look up the SHA256 at MalwareBazaar and VirusTotal "
@@ -215,7 +215,10 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
     if (r := by_name.get("strings")) and r.status in (Status.OK, Status.PARTIAL):
         r.findings += [
             Finding(f.id, f.severity, f.title, f.detail, "indicators")
-            for f in summarize_indicators(indicators)
+            # FLOSS-only indicators are listed but kept out of findings, so they cannot
+            # reach the verdict until a benign-corpus rerun clears them (M6).
+            for f in summarize_indicators(
+                [i for i in indicators if set(i.get("sources", [])) != {"floss"}])
         ]
     if children:
         source = next(s for s in MEMBER_SOURCES if s in by_name and any(

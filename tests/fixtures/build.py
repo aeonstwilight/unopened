@@ -80,6 +80,7 @@ class PESpec:
     certificate: bytes | None = None  # raw bCertificate contents of a WIN_CERTIFICATE
     pdb_path: str | None = None
     reproducible: bool = False  # add an IMAGE_DEBUG_TYPE_REPRO entry (needs pdb_path)
+    text: bytes | None = None  # code for .text (default: a lone `ret`)
 
 
 def _build_rdata(spec: PESpec, rva: int, ptr_size: int) -> tuple[bytes, dict[str, tuple[int, int]]]:
@@ -144,7 +145,8 @@ def build_pe(spec: PESpec | None = None) -> bytes:
     ptr_size = 8 if spec.pe32plus else 4
     opt_size = (112 if spec.pe32plus else 96) + 16 * 8
     sections_meta: list[Section] = [
-        Section(b".text", b"\xc3" + b"\xcc" * 15, spec.text_characteristics),
+        Section(b".text", spec.text if spec.text is not None else b"\xc3" + b"\xcc" * 15,
+                spec.text_characteristics),
     ]
     rdata_rva = SECT_ALIGN * 2
     rdata, dirs = _build_rdata(spec, rdata_rva, ptr_size)
@@ -331,3 +333,32 @@ if __name__ == "__main__":
     for name, fn in ALL.items():
         (out / name).write_bytes(fn())
         print(out / name)
+
+
+STACK_STRING = "http://floss.example.com/stage2"
+
+
+def stackstring_exe() -> bytes:
+    """x86 code that writes STACK_STRING into a local buffer four bytes at a time and
+    passes it to ExitProcess, the classic stack-string pattern FLOSS recovers. The code
+    is only ever parsed and emulated by tests, never run."""
+    import pefile
+
+    spec = PESpec(imports={"kernel32.dll": ["ExitProcess"]})
+    # Build once to learn where ExitProcess's IAT slot lands; .text grows but stays
+    # within one section alignment, so the layout does not move.
+    pe = pefile.PE(data=build_pe(spec))
+    iat = next(imp.address for entry in pe.DIRECTORY_ENTRY_IMPORT for imp in entry.imports
+               if imp.name == b"ExitProcess")
+    text = STACK_STRING.encode() + b"\0"
+    text += b"\0" * (-len(text) % 4)
+    frame = len(text) + 8
+    code = bytearray(b"\x55\x89\xe5\x83\xec" + bytes([frame]))  # push ebp; mov ebp,esp; sub esp
+    for i in range(0, len(text), 4):
+        disp = (-frame + i) & 0xFF
+        code += b"\xc7\x45" + bytes([disp]) + text[i:i + 4]  # mov dword [ebp-disp], imm32
+    code += b"\x8d\x45" + bytes([(-frame) & 0xFF])  # lea eax, [ebp-frame]
+    code += b"\x50"  # push eax
+    code += b"\xff\x15" + struct.pack("<I", iat)  # call [ExitProcess]
+    code += b"\xc9\xc3"  # leave; ret
+    return build_pe(PESpec(imports={"kernel32.dll": ["ExitProcess"]}, text=bytes(code)))

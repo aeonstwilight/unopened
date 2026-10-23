@@ -17,7 +17,7 @@ from ..indicators.allowlist import Allowlist
 from ..model import AnalyzerOutput, FileType
 from ..safezip import MemberLimits
 
-DEFAULT_TIMEOUTS = {"capa": 300.0}
+DEFAULT_TIMEOUTS = {"capa": 300.0, "capa_file_scope": 60.0, "floss": 180.0}
 
 
 class AnalyzerUnavailable(Exception):
@@ -70,6 +70,9 @@ class Analyzer:
     kinds: frozenset[str] | None = None  # None: applies to every file
     requires: tuple[str, ...] = ()  # importable module names
     install_hint: str = ""
+    # Cheaper analyzer run in its place when this one times out. Its result replaces the
+    # timeout, marked PARTIAL, so the report shows what was checked and what was not.
+    fallback: Analyzer | None = None
 
 
 def registry() -> list[Analyzer]:
@@ -78,6 +81,7 @@ def registry() -> list[Analyzer]:
         authenticode,
         basic,
         capa_analyzer,
+        floss_analyzer,
         lnk,
         office,
         pdf,
@@ -106,6 +110,16 @@ def registry() -> list[Analyzer]:
             "capa", "Capabilities mapped to MITRE ATT&CK (capa)", capa_analyzer.analyze_capa,
             kinds=frozenset({"pe"}), requires=("capa",),
             install_hint="pip install 'unopened[capa]'",
+            fallback=Analyzer(
+                "capa_file_scope", "Capabilities from file-level capa rules only",
+                capa_analyzer.analyze_capa_file_scope, kinds=frozenset({"pe"}),
+                requires=("capa",),
+            ),
+        ),
+        Analyzer(
+            "floss", "Decoded and stack strings (FLOSS)", floss_analyzer.analyze_floss,
+            kinds=frozenset({"pe"}), requires=("floss",),
+            install_hint="pip install 'unopened[floss]'",
         ),
         Analyzer(
             "office", "Office macros, auto-run triggers, embedded objects and external references",

@@ -1,6 +1,6 @@
 """Plain string extraction (ASCII and UTF-16LE) and indicator extraction over them.
 
-FLOSS-style decoding of obfuscated or stack strings is not done here; the report says so.
+Decoded and stack strings come from the separate floss analyzer (PE files only).
 """
 
 from __future__ import annotations

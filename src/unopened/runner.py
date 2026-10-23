@@ -108,6 +108,9 @@ def run_analyzer(analyzer: Analyzer, ctx: Context, *, isolate: bool = True,
     if kind == "timeout" and clipped:
         payload = (f"stopped after {timeout:g} seconds, when the {budget:g}-second time "
                    "budget for this file ran out")
+    if kind == "timeout" and analyzer.fallback is not None:
+        remaining = None if time_left is None else time_left - duration
+        return _with_fallback(analyzer, ctx, str(payload), duration, isolate, remaining)
     if kind != "ok":
         return AnalyzerResult(analyzer.name, Status(kind), str(payload), duration)
     out: AnalyzerOutput = payload
@@ -118,4 +121,29 @@ def run_analyzer(analyzer: Analyzer, ctx: Context, *, isolate: bool = True,
     return AnalyzerResult(
         analyzer.name, status, message, duration,
         data=out.data, findings=out.findings, errors=out.errors, not_checked=out.not_checked,
+    )
+
+
+def _with_fallback(analyzer: Analyzer, ctx: Context, why: str, spent: float, isolate: bool,
+                   time_left: float | None) -> AnalyzerResult:
+    """Run the cheaper fallback after a timeout. Success is reported under the original
+    analyzer's name as PARTIAL, with the timeout as its error, never as a clean OK."""
+    assert analyzer.fallback is not None
+    result = run_analyzer(analyzer.fallback, ctx, isolate=isolate, time_left=time_left)
+    note = f"full analysis {why}"
+    for finding in result.findings:
+        finding.source = analyzer.name
+    if result.status not in (Status.OK, Status.PARTIAL):
+        return AnalyzerResult(
+            analyzer.name, Status.TIMEOUT,
+            f"{why}; the {analyzer.fallback.name} fallback also failed "
+            f"({result.status}: {result.message})", spent + result.duration_seconds,
+        )
+    return AnalyzerResult(
+        analyzer.name, Status.PARTIAL,
+        f"{why}; reduced analysis ({analyzer.fallback.title.lower()}) ran instead",
+        spent + result.duration_seconds,
+        data={**result.data, "fallback": analyzer.fallback.name},
+        findings=result.findings, errors=[note, *result.errors],
+        not_checked=result.not_checked,
     )

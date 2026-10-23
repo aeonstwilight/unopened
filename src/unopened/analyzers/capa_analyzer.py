@@ -29,6 +29,10 @@ NOTABLE_TACTICS = {
     "Collection", "Impact", "Command and Control", "Exfiltration", "Lateral Movement",
 }
 QUIET_LOGGERS = ("capa", "vivisect", "envi", "vtrace", "viv_utils", "dnfile", "dncil")
+FILE_SCOPE_NOTE = (
+    "Function-level capabilities (code-pattern rules) were not checked: full analysis timed "
+    "out, so only file-level rules (imports, exports, strings, sections) ran"
+)
 
 
 def _parse_attack(entries: list[str]) -> list[dict[str, str]]:
@@ -44,7 +48,40 @@ def _parse_attack(entries: list[str]) -> list[dict[str, str]]:
     return parsed
 
 
+def load_rules(rules_path: Any) -> Any:
+    """Parse the rule set, reusing capa's on-disk cache when the rules are unchanged.
+
+    capa writes the cache on every load anyway; reading it back saves re-parsing about a
+    thousand YAML rules per file (seconds each time, which counted against capa's time
+    limit during M5 validation). A cache directory that cannot be written is not an error:
+    the rules are parsed into a throwaway directory instead."""
+    import tempfile
+
+    import capa.rules
+    import capa.rules.cache
+
+    try:
+        return capa.rules.get_rules([rules_path], enable_cache=True)
+    except OSError:
+        with tempfile.TemporaryDirectory(prefix="unopened-capa-") as tmp:
+            from pathlib import Path
+
+            return capa.rules.get_rules([rules_path], cache_dir=Path(tmp), enable_cache=False)
+
+
 def analyze_capa(ctx: Context) -> AnalyzerOutput:
+    return _analyze(ctx, file_scope_only=False)
+
+
+def analyze_capa_file_scope(ctx: Context) -> AnalyzerOutput:
+    """Fallback when full capa analysis times out: file-level rules only, no disassembly."""
+    out = _analyze(ctx, file_scope_only=True)
+    out.data["file_scope_only"] = True
+    out.not_checked.append(FILE_SCOPE_NOTE)
+    return out
+
+
+def _analyze(ctx: Context, file_scope_only: bool) -> AnalyzerOutput:
     rules_path = ctx.options.capa_rules
     if rules_path is None:
         raise AnalyzerUnavailable(
@@ -59,22 +96,27 @@ def analyze_capa(ctx: Context) -> AnalyzerOutput:
     import capa.capabilities.common as capabilities
     import capa.helpers
     import capa.loader
-    import capa.rules
-    import capa.rules.cache  # noqa: F401  (get_rules needs it imported)
 
-    rules = capa.rules.get_rules([rules_path], enable_cache=False)
+    rules = load_rules(rules_path)
     fmt = capa.helpers.get_auto_format(ctx.path)
     if fmt not in (capa.loader.FORMAT_PE, capa.loader.FORMAT_DOTNET):
         raise ValueError(f"capa does not support this file's format ({fmt})")
     is_dotnet = fmt == capa.loader.FORMAT_DOTNET
-    backend = capa.loader.BACKEND_DOTNET if is_dotnet else capa.loader.BACKEND_VIV
+    if file_scope_only:
+        backend, fmt = capa.loader.BACKEND_PEFILE, capa.loader.FORMAT_PE
+    else:
+        backend = capa.loader.BACKEND_DOTNET if is_dotnet else capa.loader.BACKEND_VIV
     sig_dir = ctx.options.capa_signatures
     sigs = capa.loader.get_signatures(sig_dir) if sig_dir else []
     extractor = capa.loader.get_extractor(
         ctx.path, fmt, capa.loader.OS_AUTO, backend, sigs,
         should_save_workspace=False, disable_progress=True,
     )
-    result = capabilities.find_capabilities(rules, extractor, disable_progress=True)
+    if file_scope_only:
+        # The pefile extractor has no functions; match file-scope rules directly.
+        result = capabilities.find_file_capabilities(rules, extractor, {})
+    else:
+        result = capabilities.find_capabilities(rules, extractor, disable_progress=True)
 
     found: list[dict[str, Any]] = []
     limitations: list[dict[str, str]] = []
