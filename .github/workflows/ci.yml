@@ -28,8 +28,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[all,dev]"
           # oscrypto 1.3.0 on PyPI cannot parse OpenSSL 3.0.10+ version strings, so signify
-          # (Authenticode) fails to load without the upstream fix. See README, Install.
-          pip install "oscrypto @ git+https://github.com/wbond/oscrypto.git@1547f535001ba568b239b8797465536759c742a3"
+          # (Authenticode) fails to load without the upstream fix. Both report version 1.3.0,
+          # so the fix must be force-reinstalled over the PyPI copy. See README, Install.
+          pip install --force-reinstall --no-deps "oscrypto @ git+https://github.com/wbond/oscrypto.git@1547f535001ba568b239b8797465536759c742a3"
+          python -c "import signify.authenticode"  # fail here, clearly, if it still cannot load
       - name: Lint
         run: ruff check src tests
       - name: Verdict rules documentation is current

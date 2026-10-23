@@ -147,10 +147,11 @@ marks that check **UNAVAILABLE** and says how to install it.
 
 **Authenticode on OpenSSL 3.0.10 or newer.** signify depends on oscrypto. The oscrypto
 1.3.0 release on PyPI cannot parse OpenSSL version strings like `3.0.13`, so signify
-fails to load. Install the fixed upstream revision:
+fails to load. Install the fixed upstream revision over it (`--force-reinstall` is needed:
+both report version 1.3.0, so pip otherwise keeps the broken copy):
 
 ```sh
-pip install "oscrypto @ git+https://github.com/wbond/oscrypto.git@1547f535001ba568b239b8797465536759c742a3"
+pip install --force-reinstall --no-deps "oscrypto @ git+https://github.com/wbond/oscrypto.git@1547f535001ba568b239b8797465536759c742a3"
 ```
 
 Without that fix the tool still runs, but the report marks the signature check
