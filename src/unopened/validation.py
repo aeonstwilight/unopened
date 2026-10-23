@@ -299,7 +299,10 @@ def _incomplete(report: dict[str, Any]) -> list[str]:
     for node, _ in _nodes(report, ""):
         for name, a in node.get("analyzers", {}).items():
             if a.get("status") in INCOMPLETE:
-                out.append(f"{name}:{a['status']}")
+                # A fallback after a timeout (e.g. capa file-scope rules only) is still a
+                # timeout of the full check; keep it countable across runs.
+                fell_back = (a.get("data") or {}).get("fallback")
+                out.append(f"{name}:timeout-fallback" if fell_back else f"{name}:{a['status']}")
     return sorted(set(out))
 
 

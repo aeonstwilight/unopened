@@ -142,14 +142,16 @@ marks that check **UNAVAILABLE** and says how to install it.
 | `capa` | flare-capa | Capabilities and ATT&CK mapping (heavy: brings vivisect) |
 | `archive` | py7zr, pyzipper, pycdlib | 7z, AES-encrypted ZIP and ISO extraction (plain and ZipCrypto ZIP work without it) |
 | `pdf` | pypdf | PDF JavaScript, actions and attachments |
+| `floss` | flare-floss | Decoded, stack and tight strings from PE files (heavy: brings vivisect) |
 | `all` | all of the above | |
 
 **Authenticode on OpenSSL 3.0.10 or newer.** signify depends on oscrypto. The oscrypto
 1.3.0 release on PyPI cannot parse OpenSSL version strings like `3.0.13`, so signify
-fails to load. Install the fixed upstream revision:
+fails to load. Install the fixed upstream revision over it (`--force-reinstall` is needed:
+both report version 1.3.0, so pip otherwise keeps the broken copy):
 
 ```sh
-pip install "oscrypto @ git+https://github.com/wbond/oscrypto.git@1547f535001ba568b239b8797465536759c742a3"
+pip install --force-reinstall --no-deps "oscrypto @ git+https://github.com/wbond/oscrypto.git@1547f535001ba568b239b8797465536759c742a3"
 ```
 
 Without that fix the tool still runs, but the report marks the signature check
@@ -187,7 +189,7 @@ reported as not run, never as "no matches".
 | `--yara-rules PATH` | `$UNOPENED_YARA_RULES` | YARA rules directory or file |
 | `--capa-rules DIR` | `$UNOPENED_CAPA_RULES` | capa rules directory |
 | `--capa-signatures DIR` | `$UNOPENED_CAPA_SIGNATURES` | capa FLIRT signatures (library-function recognition) |
-| `--capa-timeout SECONDS` | `300` | Time limit for capa, which is slow on large binaries |
+| `--capa-timeout SECONDS` | `300` | Time limit for full capa analysis. If it runs out, capa reruns with file-level rules only (60 s) and the report marks capa PARTIAL, listing function-level capabilities under Not checked |
 | `--max-size SIZE` | `200MB` | Refuse larger files (`5000000`, `50MB`, `1G`); also the per-member extraction limit |
 | `--timeout SECONDS` | `60` | Per-analyzer time limit; a stopped analyzer is reported as TIMED OUT |
 | `--file-timeout SECONDS` | `900` | Time budget for the whole file, archive members included; checks and members still pending when it runs out are listed under Not checked and the verdict's confidence drops to low |
@@ -343,7 +345,8 @@ their members.
 | PE | Headers, compile timestamp (zeroed, future, implausible, Delphi default), sections with entropy and permissions, packer section names, W+X sections, entry point placement, imports grouped by behavior (`data/pe_imports.toml`), exports, PDB path, overlay, truncation, .NET detection, parser anomalies. |
 | Authenticode | Signature presence and validity (offline, against the Microsoft root list bundled with signify), signer, issuer and timestamp. Revocation is not checked. |
 | Strings and indicators | ASCII and UTF-16LE strings, then URLs, domains (validated against a TLD list), IPv4/IPv6 (with private/public tags), emails, file paths, UNC paths, and registry keys (persistence locations tagged). Indicators that analyzers decode (macro source, shortcut arguments, decoded PowerShell, the LNK creator's host name and MAC address) join the same list, tagged with their source. |
-| capa (PE) | Capabilities from your capa rules, with namespace, ATT&CK technique IDs and MBC behaviors, grouped by tactic. Reports when capa's limitation rules say a file is packed or wrapped. |
+| capa (PE) | Capabilities from your capa rules, with namespace, ATT&CK technique IDs and MBC behaviors, grouped by tactic. Reports when capa's limitation rules say a file is packed or wrapped. The parsed rule set is cached between files (capa's own cache), and a run that times out falls back to file-level rules instead of reporting nothing. |
+| FLOSS (PE) | Strings the program decodes or builds on the stack at run time, recovered by emulating its code (decoded, stack and tight strings). They are listed and searched for indicators (source `floss`) but do **not** affect the verdict until a benign-corpus rerun confirms they add no false positives. .NET programs and files over 16 MB are skipped and said so. |
 | YARA | Every `.yar`/`.yara` file under the rules path. The namespace is the file's relative path. Reports rule, tags, meta and matched strings (capped, shown as text or hex). A file that fails to compile is reported and the others still run. Severity comes from a rule's `severity` or `score` meta. |
 | Office (OLE and OOXML) | VBA macros (module source), auto-run triggers, suspicious keywords, VBA stomping, Excel 4.0 (XLM) macro sheets, embedded OLE packages (with file names), ActiveX parts, DDE fields, and external relationships such as remote template injection. Legacy files get a subtype (Word/Excel/PowerPoint/MSI/MSG) for extension checks. |
 | LNK | Target, arguments, working directory, icon, comment and window style. Flags LOLBin targets and arguments (`data/lolbins.toml`, editable), encoded PowerShell (decoded as text for display only), hidden windows, whitespace padding, borrowed icons, network targets, and data appended after the shortcut. |
@@ -351,8 +354,7 @@ their members.
 | Scripts | PowerShell, JavaScript/JScript, VBScript and batch. Deobfuscation by text transformation only (base64 including `-EncodedCommand`, character codes, string concatenation), repeated up to five rounds. Batch variable references (`%v%`, `%v:~n,m%`) are expanded the way cmd.exe would, as text. Keywords per language from `data/script_keywords.toml` (editable), plus a combined "downloads and runs code" finding. Obfuscation is judged by shape (chained char codes, joined literals, variable substrings), not by counting single calls. Decoded text feeds the indicator list. |
 | PDF | Raw keyword counts with `#xx`-escaped names decoded (and flagged), then JavaScript source with its trigger (OpenAction, /AA), Launch actions, URIs, XFA and rich media. Attachments are extracted within the limits and triaged recursively. |
 
-Not in this version (always listed under **Not checked** in the report): FLOSS-decoded
-strings;
+Not in this version (always listed under **Not checked** in the report):
 extraction of files embedded in Office documents; DDE in legacy binary Word files; VHD
 and other disk-image formats.
 
@@ -362,6 +364,8 @@ and other disk-image formats.
   *emulate* instructions inside a pure-Python emulator to recover values such as call
   arguments. Nothing runs natively, the operating system never loads the sample, and no
   analysis workspace is saved next to it.
+- **FLOSS** works the same way: it finds functions that look like string decoders and
+  emulates them in vivisect's pure-Python emulator. Nothing runs natively.
 - **olevba** extracts macro source as text. Its VBA expression deobfuscation stays off,
   and XLMMacroDeobfuscator (which emulates Excel 4.0 formulas) is disabled even if it is
   installed. XLM detection in legacy `.xls` files parses BIFF records only.
@@ -400,8 +404,13 @@ pytest                 # full suite; fixtures are generated synthetically at tes
 ruff check src tests
 ```
 
+GitHub Actions (`.github/workflows/ci.yml`) runs the same lint and tests, plus a check
+that `docs/verdict-rules.md` is current, on Python 3.11 and 3.13 for every pull request
+and every push to `main`.
+
 Fixtures are built byte by byte by `tests/fixtures/`:
-- `build.py`: minimal PE images whose only code is `ret`.
+- `build.py`: minimal PE images whose only code is `ret`, plus one that builds a URL on
+  the stack for the FLOSS tests.
 - `office.py`: an OLE writer plus a VBA project whose only macro shows a message box,
   with keyword bait inside strings that never run.
 - `lnk.py`: shortcuts whose commands are inert text.

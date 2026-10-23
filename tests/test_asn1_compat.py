@@ -51,10 +51,15 @@ def test_reproduces_the_crash_and_the_fix():
 
     der = mldsa_der()
     if not asn1_compat._applied:
-        # Without the patch: the exact failure seen in the VM.
+        # Without the patch, signify up to 0.9.2 fails exactly as seen in the VM. signify
+        # 0.9.3 fixed this upstream and hashes the certificate fine; either is acceptable,
+        # but any other failure is not.
         cert = Certificate(x509.Certificate.load(der))
-        with pytest.raises(KeyError, match=ML_DSA_87):
+        try:
             hash(cert)
+        except KeyError as exc:
+            assert ML_DSA_87 in str(exc)
+    # With the patch, every signify version must handle the certificate.
     asn1_compat.apply()
     cert = Certificate(x509.Certificate.load(der))
     assert hash(cert)

@@ -398,8 +398,15 @@ take a second or two.
   signals are each common in legitimate software. Patterns for them need more samples
   than one set provides, checked against both benign corpora.
 - **capa timeouts.** capa stopped at 300 s on 17 corpus 1 files in run 4, and the
-  verdict on at least one (ZoomIt64) depends on whether it finishes. A longer limit for
-  validation runs, or a cheaper capa configuration, would make runs repeatable.
+  verdict on at least one (ZoomIt64) depends on whether it finishes. M6 addressed this
+  without a new measurement: the parsed rule set is now reused from capa's cache instead
+  of re-parsing about a thousand rules per file, and a run that still times out falls
+  back to file-level rules and is reported as PARTIAL (`capa:timeout-fallback` in the
+  results). The next corpus run should show whether the timeouts drop and whether the
+  ZoomIt64 verdict becomes repeatable.
+- **FLOSS.** Added in M6 for PE files. Its strings feed the indicator list but not the
+  verdict. A rerun of both benign corpora with FLOSS installed is needed before its
+  indicators are allowed to contribute to findings.
 - **Known limitations, documented rather than fixed:** link-only PDF lures and lure
   documents with only hyperlinks, MSI contents, macro workbooks without auto-run that use
   suspicious functions, VBScript loaders that hide code behind Execute, and large scripts

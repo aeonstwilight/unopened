@@ -52,8 +52,9 @@ It is a new, standalone project. Do not reference, copy from, or model it on any
 - **M3**: Archive and image handling with extraction limits, script and PDF analyzers, verdict rules.
 - **M4**: Opt-in hash reputation lookups, SIEM search snippets.
 - **M5**: Validation against real samples and a benign corpus (see "M5: Validation plan" below). No new analyzers in this milestone; only fixes for gaps the validation finds.
+- **M6**: Hardening that needs no analysis VM: CI (lint, tests and verdict-docs check on Python 3.11 and 3.13), capa rule caching with a file-scope fallback when capa times out, and FLOSS decoded/stack/tight strings for PE files. FLOSS output feeds indicators only and stays out of the verdict until a benign-corpus rerun clears it.
 
-M1 to M4 are complete. M5 is next.
+M1 to M6 are complete. Next work needs the analysis VM: a fresh holdout set, a benign-corpus rerun with FLOSS and the capa fallback, and patterns for compiled loaders (see "What remains" in `docs/validation.md`).
 
 At the start of each milestone, plan first: propose structure, dependencies and tests, then wait for approval before writing code. Finish each milestone with passing tests and a commit.
 

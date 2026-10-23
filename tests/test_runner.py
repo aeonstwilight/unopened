@@ -102,3 +102,20 @@ def test_every_incomplete_status_lands_in_not_checked(tmp_path, monkeypatch):
     assert "Hanging check: timeout" in checks
     assert "Missing-library check: unavailable" in checks
     assert "Partial check: part: failed to parse: section table: bad" in checks
+
+
+def test_fallback_after_timeout_is_partial_not_ok(tmp_path):
+    fallback = Analyzer("cheap", "Cheap version of the check", ok)
+    a = Analyzer("h", "Hangs", hang, fallback=fallback)
+    r = runner.run_analyzer(a, ctx(tmp_path, timeout=0.5))
+    assert r.name == "h" and r.status == Status.PARTIAL
+    assert r.data["fallback"] == "cheap" and r.data["x"] == 1
+    assert r.errors[0].startswith("full analysis did not finish")
+    assert r.findings[0].source == "h"
+
+
+def test_fallback_respects_file_budget(tmp_path):
+    a = Analyzer("h", "Hangs", hang, fallback=Analyzer("cheap", "Cheap", ok))
+    r = runner.run_analyzer(a, ctx(tmp_path, timeout=0.5), time_left=0.5)
+    assert r.status == Status.TIMEOUT
+    assert "fallback also failed" in r.message

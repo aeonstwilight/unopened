@@ -224,3 +224,14 @@ def test_resume_survives_a_row_cut_off_by_a_crash(tmp_path, samples, capsys):
     assert _verdicts(out) == full
     text = (out / "results.csv").read_text()
     assert "\0" not in text and len(text.splitlines()) == len(lines)
+
+
+def test_fallback_is_labeled_as_a_timeout():
+    from unopened.validation import _incomplete
+
+    report = {"analyzers": {
+        "capa": {"status": "partial", "data": {"fallback": "capa_file_scope"}},
+        "office": {"status": "partial", "data": {}},
+        "yara": {"status": "ok", "data": {}},
+    }, "members": []}
+    assert _incomplete(report) == ["capa:timeout-fallback", "office:partial"]

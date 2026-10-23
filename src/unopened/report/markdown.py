@@ -97,6 +97,7 @@ def render(report: Report) -> str:
     lines += _section(report, "script", "Script", _script)
     lines += _section(report, "pdf", "PDF", _pdf)
     lines += _section(report, "archive", "Archive contents", _archive)
+    lines += _section(report, "floss", "Decoded and stack strings (FLOSS)", _floss)
     lines += _section(report, "yara", "YARA", _yara)
     lines += _reputation(report)
     if report.children:
@@ -623,4 +624,24 @@ def _hunt(report: Report) -> list[str]:
                       "", fence, q["query"], fence, ""]
     if not any_query:
         lines += ["No values to search for.", ""]
+    return lines
+
+
+FLOSS_LABELS = {"decoded": "Decoded", "stack": "Stack", "tight": "Tight"}
+MAX_FLOSS_ROWS = 50
+
+
+def _floss(d: dict[str, Any]) -> list[str]:
+    if d.get("skipped"):
+        return [f"Not run: {esc(d['skipped'])}.", ""]
+    rows = [[FLOSS_LABELS[kind], code(item["string"]), code(item["function"])]
+            for kind in FLOSS_LABELS for item in d.get(kind, [])]
+    lines = ["Strings the program builds or decodes at run time, recovered by emulating its "
+             "code in FLOSS (nothing ran natively). Indicators found in them are in the "
+             "Indicators section with source floss. They do not affect the verdict yet.", ""]
+    if not rows:
+        return lines + ["None recovered.", ""]
+    lines += table(["Kind", "String", "Function"], rows[:MAX_FLOSS_ROWS])
+    if len(rows) > MAX_FLOSS_ROWS:
+        lines += [f"...and {len(rows) - MAX_FLOSS_ROWS} more in the JSON report.", ""]
     return lines
