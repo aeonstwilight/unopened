@@ -7,6 +7,8 @@ name = "unopened"
 version = "0.1.0"
 description = "Static malware triage for SOC analysts. Never executes the sample."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "pefile>=2023.2.7",
