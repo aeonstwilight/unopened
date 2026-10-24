@@ -14,7 +14,7 @@ import time
 import traceback
 from typing import Any
 
-from .analyzers import Analyzer, AnalyzerUnavailable, Context
+from .analyzers import Analyzer, AnalyzerUnavailable, Context, type_keys
 from .model import AnalyzerOutput, AnalyzerResult, Status
 
 
@@ -83,7 +83,7 @@ def run_analyzer(analyzer: Analyzer, ctx: Context, *, isolate: bool = True,
     """`time_left` is what remains of the whole file's time budget (Options.file_timeout);
     the analyzer gets the smaller of that and its own limit, and none at all once it is
     used up."""
-    if analyzer.kinds is not None and ctx.file_type.kind not in analyzer.kinds:
+    if analyzer.kinds is not None and not analyzer.kinds & type_keys(ctx.file_type):
         return AnalyzerResult(analyzer.name, Status.NOT_APPLICABLE)
     missing = _missing_module(analyzer.requires)
     if missing:

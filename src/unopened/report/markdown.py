@@ -95,6 +95,7 @@ def render(report: Report) -> str:
     lines += _section(report, "office", "Office document", _office)
     lines += _section(report, "lnk", "Shortcut (LNK)", _lnk)
     lines += _section(report, "script", "Script", _script)
+    lines += _section(report, "email", "Email", _email)
     lines += _section(report, "pdf", "PDF", _pdf)
     lines += _section(report, "archive", "Archive contents", _archive)
     lines += _section(report, "floss", "Decoded and stack strings (FLOSS)", _floss)
@@ -508,6 +509,48 @@ def _pdf(d: dict[str, Any]) -> list[str]:
         lines += table(["Attachment", "Declared size"],
                        [[code(e["name"]), f"{e['declared_size']:,}" if e.get("declared_size")
                          is not None else ""] for e in d["embedded"]])
+    return lines
+
+
+EMAIL_HEADERS = [
+    ("from", "From"), ("sender", "Sender"), ("reply_to", "Reply-To"),
+    ("return_path", "Return-Path"), ("to", "To"), ("cc", "Cc"), ("subject", "Subject"),
+    ("date", "Date"), ("message_id", "Message-ID"), ("x_mailer", "X-Mailer"),
+    ("x_originating_ip", "X-Originating-IP"),
+]
+
+
+def _email(d: dict[str, Any]) -> list[str]:
+    h = d.get("headers", {})
+    rows = [[label, code(h[key])] for key, label in EMAIL_HEADERS if h.get(key)]
+    auth = d.get("auth", {})
+    if auth.get("source"):
+        rows.append(["Authentication", ", ".join(
+            f"{m.upper()} {code(auth[m])}" for m in ("spf", "dkim", "dmarc") if auth.get(m))
+            + f" (from {esc(auth['source'])}, topmost header)"])
+    else:
+        rows.append(["Authentication", "no results recorded by a receiving server"])
+    rows.append(["Received hops", str(len(d.get("received", [])))])
+    lines = [f"Format: {esc(d.get('format', '').upper())}.", ""]
+    lines += table(["Header", "Value"], rows)
+    links = d.get("links", [])
+    if links:
+        link_rows = [[code(lk.get("text") or "(plain text)"), code(lk["href"]),
+                      esc(lk.get("note", ""))] for lk in links[:MAX_ROWS_PER_TYPE]]
+        lines += [f"Links ({len(links)}), none followed:", ""]
+        lines += table(["Link text", "Opens", "Notes"], link_rows)
+        if len(links) > MAX_ROWS_PER_TYPE:
+            lines += [f"...and {len(links) - MAX_ROWS_PER_TYPE} more in the JSON report.", ""]
+    for form in d.get("forms", []):
+        lines += [f"- Form submitting to {code(form.get('action') or '(itself)')}"
+                  + (" with a password field" if form.get("password") else ""), ""]
+    attachments = d.get("attachments", [])
+    if attachments:
+        skipped = {m["name"]: m["skipped"] for m in d.get("members", []) if m.get("skipped")}
+        att_rows = [[code(a["name"]), esc(a.get("content_type", "")),
+                     f"{a['size']:,}" if isinstance(a.get("size"), int) else "",
+                     esc(skipped.get(a["name"], ""))] for a in attachments]
+        lines += table(["Attachment", "Declared type", "Size", "Notes"], att_rows)
     return lines
 
 

@@ -3,6 +3,23 @@
 Milestones are defined in `CLAUDE.md`. Each was planned, approved and merged as its own
 pull request.
 
+## M7: email input
+
+- **Email analyzer** for `.eml` (identified from content, not the extension) and Outlook
+  `.msg`: sender and reply-to checks, SPF/DKIM/DMARC from the topmost
+  `Authentication-Results` header, look-alike and punycode domains against an editable
+  brand list (`data/brands.toml`), link-text mismatches, forms, raw-IP and script links.
+- **Attachments** are extracted with the bounded member writer and triaged recursively,
+  including attached messages. An attachment with a runnable extension counts toward
+  V-MAL-06; emails take the most severe verdict of their members (V-MAL-09, V-SUS-02,
+  V-CNA-04).
+- **Hunt queries** for other deliveries of the same message: Defender for Office 365
+  `EmailEvents` and `EmailUrlInfo`, the Splunk CIM Email data model, and ECS `email.*`.
+- Analyzers can now apply to a subtype (`"ole:outlook"`), so `.msg` files keep the Office
+  checks and also get the email analyzer.
+- Quoted-printable soft line breaks are removed before raw string extraction from an
+  email, so domains are not cut in half.
+
 ## M6: hardening without the analysis VM
 
 - **CI**: GitHub Actions runs `ruff`, the test suite and a check that

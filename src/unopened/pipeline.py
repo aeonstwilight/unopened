@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__, behaviors
-from .analyzers import Context, Options, registry
+from .analyzers import Context, Options, registry, type_keys
 from .analyzers.strings import summarize_indicators
 from .extraction import Budget, basename
 from .identify import identify
@@ -60,13 +60,13 @@ PLANNED_BY_KIND: dict[str, list[tuple[str, str]]] = {
     "unknown": [("Type-specific analysis", "file type not recognized; only hashes, strings "
                  "and YARA were checked")],
 }
-EXTRACTING_KINDS = {"zip", "7z", "iso", "pdf"}
+EXTRACTING_KINDS = {"zip", "7z", "iso", "pdf", "email", "ole:outlook"}
 # M5 holdout: two MSI installers came back "no findings" without the report saying their
 # contents were never examined.
 MSI_NOT_CHECKED = "Windows Installer (MSI) contents"
 MSI_REASON = ("custom actions, embedded scripts and packaged files are not analyzed in "
               "version 1; only hashes, strings and YARA were checked")
-MEMBER_SOURCES = ("archive", "pdf")
+MEMBER_SOURCES = ("archive", "pdf", "email")
 RUNNABLE_MEMBER_KINDS = {"pe", "mz", "lnk", "script"}
 
 
@@ -150,7 +150,7 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
             "identify", Status.ERROR, f"{type(exc).__name__}: {exc}"
         ))
     extract_dir = None
-    if file_type.kind in EXTRACTING_KINDS and depth < options.limits.max_depth:
+    if EXTRACTING_KINDS & type_keys(file_type) and depth < options.limits.max_depth:
         extract_dir = session.new_extract_dir()
     ctx = Context(path=path, file_type=file_type, options=options, size=size, depth=depth,
                   extract_dir=extract_dir, files_left=session.budget.files_left,
@@ -285,7 +285,7 @@ def temper_for_valid_signature(results: list[AnalyzerResult]) -> None:
 
 
 def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
-    """Findings about what an archive, disk image or PDF carries, known only after its
+    """Findings about what an archive, disk image, PDF or email carries, known only after its
     members have been identified."""
     findings: list[Finding] = []
     kinds = {id(c): c["report"].file_type.kind if c["report"].file_type else "" for c in children}
@@ -295,7 +295,7 @@ def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
         findings.append(Finding(
             "container.runnable_member", Severity.MEDIUM,
             f"Contains programs, shortcuts or scripts ({len(runnable)})",
-            f"{names}. Delivering these inside an archive or image is a common way past "
+            f"{names}. Delivering these inside an archive, image or email is a common way past "
             "mail filters.", "container",
         ))
     lnks = [c for c in runnable if kinds[id(c)] == "lnk"]

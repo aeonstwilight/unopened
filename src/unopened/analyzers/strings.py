@@ -28,6 +28,11 @@ def iter_strings(data: bytes, min_length: int):
 def analyze_strings(ctx: Context) -> AnalyzerOutput:
     opts = ctx.options
     data = ctx.path.read_bytes()
+    if ctx.file_type.kind == "email":
+        # Quoted-printable soft line breaks split words in the raw message ("log=\n
+        # in.example.com"), which would yield cut-off domains. The email analyzer feeds the
+        # decoded bodies and links separately.
+        data = data.replace(b"=\r\n", b"").replace(b"=\n", b"")
     out = AnalyzerOutput()
     counts: Counter[str] = Counter()
     found = IndicatorSet(opts.allowlist, opts.max_indicators)
