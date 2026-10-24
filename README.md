@@ -2,12 +2,14 @@
 
 Static triage of a suspicious file, for SOC analysts who are not reverse engineers.
 
-A user reports an attachment. Before anyone opens it, the analyst needs four answers:
-what is this file, what can it do, what can I search for across the environment, and how
-sure is the verdict. unopened reads the file's bytes, never runs or opens it, and writes
-one plain-language report that answers those questions, ready to paste into a ticket. It
-is just as explicit about what it did **not** check, so a skipped check never passes for
-a clean result.
+A user reports an attachment, or the whole email. Before anyone opens it, the analyst
+needs four answers: what is this file, what can it do, what can I search for across the
+environment, and how sure is the verdict. unopened reads the file's bytes, never runs or
+opens it, and writes one plain-language report that answers those questions, ready to
+paste into a ticket. Give it a reported `.eml` or `.msg` and it also checks the sender,
+the receiving server's SPF, DKIM and DMARC results, look-alike domains and the links,
+then triages every attachment. It is just as explicit about what it did **not** check, so
+a skipped check never passes for a clean result.
 
 ## What a report looks like
 
@@ -322,9 +324,10 @@ rules, in order, are in [docs/verdict-rules.md](docs/verdict-rules.md), generate
 
 - **Malicious** needs specific evidence: a high-severity YARA match, auto-run macros that
   run or download things, a shortcut launching PowerShell or similar with an encoded or
-  hidden command, DDE, remote template injection, an embedded executable, a script that
-  downloads and runs code, a PDF Launch action, a malicious archive member, or HIGH
-  findings from two different analyzers.
+  hidden command, DDE, remote template injection, an embedded executable or an email
+  attachment with a runnable extension, a script that downloads and runs code, a PDF
+  Launch action, a malicious archive or email member, or HIGH findings from two different
+  analyzers.
 - **Suspicious**: any single HIGH finding, an obfuscated script that runs code, a
   suspicious member, or three or more MEDIUM findings.
 - **Could not analyze**: the analyzer for the file's type failed, encrypted content could
@@ -333,7 +336,7 @@ rules, in order, are in [docs/verdict-rules.md](docs/verdict-rules.md), generate
   statement that the file is safe, and drops to low confidence when any check did not
   complete (including YARA or, for PE files, capa not being configured).
 
-Archives, disk images and PDFs take the most severe verdict among their own findings and
+Archives, disk images, PDFs and emails take the most severe verdict among their own findings and
 their members.
 
 ## What it checks
@@ -352,11 +355,13 @@ their members.
 | LNK | Target, arguments, working directory, icon, comment and window style. Flags LOLBin targets and arguments (`data/lolbins.toml`, editable), encoded PowerShell (decoded as text for display only), hidden windows, whitespace padding, borrowed icons, network targets, and data appended after the shortcut. |
 | Archives and disk images | ZIP (plain, ZipCrypto, AES), 7z (including encrypted headers) and ISO (Joliet, Rock Ridge, UDF, ISO 9660). Tries no password, then `infected`, then any `--archive-password`. Each member is triaged recursively with the full pipeline. Flags path-traversal and deceptive names, hidden files in images, shortcuts next to hidden files, programs inside archives, unknown passwords, decompression bombs and limits reached. |
 | Scripts | PowerShell, JavaScript/JScript, VBScript and batch. Deobfuscation by text transformation only (base64 including `-EncodedCommand`, character codes, string concatenation), repeated up to five rounds. Batch variable references (`%v%`, `%v:~n,m%`) are expanded the way cmd.exe would, as text. Keywords per language from `data/script_keywords.toml` (editable), plus a combined "downloads and runs code" finding. Obfuscation is judged by shape (chained char codes, joined literals, variable substrings), not by counting single calls. Decoded text feeds the indicator list. |
+| Email (.eml, Outlook .msg) | Headers (From, Reply-To, Return-Path, Received chain, Message-ID); SPF, DKIM and DMARC from the topmost `Authentication-Results` header only, since the receiving server adds it and lower ones can be forged by the sender; a display name showing another address or a brand the address does not belong to; Reply-To and Return-Path in a different organization; sender and link domains imitating a brand in `data/brands.toml` (editable; look-alike swaps such as `0`/`o` and `rn`/`m` undone first) or using punycode; links whose visible text names a different site, links to raw IPs or `javascript:`/`data:` URLs, forms (with or without a password field), meta refreshes and frames in the HTML body; attachments with runnable or HTML extensions. HTML is tokenized for tags, never rendered, and no link is followed. Attachments, including attached messages, are extracted within the limits and triaged recursively. For `.msg` files, the saved transport headers are read when present (otherwise the sender comes from MAPI properties and authentication is listed as not checked). |
 | PDF | Raw keyword counts with `#xx`-escaped names decoded (and flagged), then JavaScript source with its trigger (OpenAction, /AA), Launch actions, URIs, XFA and rich media. Attachments are extracted within the limits and triaged recursively. |
 
 Not in this version (always listed under **Not checked** in the report):
 extraction of files embedded in Office documents; DDE in legacy binary Word files; VHD
-and other disk-image formats.
+and other disk-image formats; Outlook messages embedded inside a `.msg` (listed, not
+extracted); TNEF (`winmail.dat`) contents; S/MIME-encrypted bodies.
 
 ### How the heavier libraries stay static
 

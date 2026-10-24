@@ -83,3 +83,10 @@ def arch_fx():
     from fixtures import archives
 
     return archives
+
+
+@pytest.fixture
+def mail_fx():
+    from fixtures import mail
+
+    return mail

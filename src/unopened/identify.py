@@ -37,6 +37,7 @@ EXPECTED_EXTENSIONS: dict[str, set[str]] = {
     "ole:powerpoint": {"ppt", "pot", "pps", "ppa"},
     "ole:msi": {"msi", "msp", "mst", "msm"},
     "ole:outlook": {"msg", "oft"},
+    "email:eml": {"eml", "mbox", "mht", "mhtml", "txt"},
     "ole:encrypted": {"docx", "docm", "xlsx", "xlsm", "xlsb", "pptx", "pptm", "doc", "xls", "ppt"},
     "ooxml:word": {"docx", "docm", "dotx", "dotm"},
     "ooxml:excel": {"xlsx", "xlsm", "xltx", "xltm", "xlam", "xlsb"},
@@ -151,10 +152,51 @@ def _identify_content(path: Path, head: bytes) -> FileType:
     for offset in (0x8001, 0x8801, 0x9001):
         if head[offset : offset + 5] == b"CD001":
             return FileType("iso", "ISO 9660 disk image")
+    if looks_like_email(head):
+        return FileType("email", "Email message (.eml, RFC 5322)", subtype="eml")
     text = _decode_text(head)
     if text is not None:
         return _identify_text(text)
     return FileType("unknown", "Unrecognized binary data")
+
+
+HEADER_LINE = re.compile(rb"^([A-Za-z][A-Za-z0-9-]{0,75}):[ \t]?")
+KEY_HEADERS = {b"from", b"to", b"subject", b"date", b"received", b"mime-version",
+               b"message-id", b"return-path", b"delivered-to", b"reply-to",
+               b"x-mailer", b"authentication-results", b"dkim-signature", b"content-type"}
+ANCHOR_HEADERS = {b"from", b"received", b"message-id", b"return-path", b"delivered-to"}
+
+
+def looks_like_email(head: bytes) -> bool:
+    """An RFC 5322 header block at the start of the file: header lines (with folded
+    continuations) up to the first blank line, naming at least three of the usual message
+    headers, one of them From, Received, Message-ID, Return-Path or Delivered-To. An
+    mbox "From " separator line may come first."""
+    lines = head[:65536].split(b"\n")
+    if lines and lines[0].startswith(b"From "):
+        lines = lines[1:]
+    names: set[bytes] = set()
+    count = 0
+    for raw in lines[:400]:
+        line = raw.rstrip(b"\r")
+        if not line:
+            break
+        if b"\x00" in line:
+            return False
+        if line[:1] in (b" ", b"\t"):
+            if count == 0:
+                return False
+            continue
+        m = HEADER_LINE.match(line)
+        if not m:
+            return False
+        names.add(m.group(1).lower())
+        count += 1
+    else:
+        if count == 0:
+            return False
+    known = names & KEY_HEADERS
+    return count >= 3 and len(known) >= 3 and bool(known & ANCHOR_HEADERS)
 
 
 def _identify_mz(head: bytes) -> FileType:
@@ -381,7 +423,8 @@ def _identify_text(text: str) -> FileType:
 
 
 def _extension_key(file_type: FileType) -> str:
-    if file_type.kind in ("ooxml", "script") or (file_type.kind == "ole" and file_type.subtype):
+    if file_type.kind in ("ooxml", "script", "email") or (
+            file_type.kind == "ole" and file_type.subtype):
         return f"{file_type.kind}:{file_type.subtype}"
     return file_type.kind
 

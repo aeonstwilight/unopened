@@ -67,12 +67,22 @@ class Analyzer:
     name: str
     title: str  # what the check is, as listed under "Not checked" when it does not run
     func: Callable[[Context], AnalyzerOutput]
-    kinds: frozenset[str] | None = None  # None: applies to every file
+    # File kinds this analyzer applies to, as "kind" or "kind:subtype" ("ole:outlook").
+    # None: applies to every file.
+    kinds: frozenset[str] | None = None
     requires: tuple[str, ...] = ()  # importable module names
     install_hint: str = ""
     # Cheaper analyzer run in its place when this one times out. Its result replaces the
     # timeout, marked PARTIAL, so the report shows what was checked and what was not.
     fallback: Analyzer | None = None
+
+
+def type_keys(file_type: FileType) -> set[str]:
+    """The keys an Analyzer.kinds set can name for this file type."""
+    keys = {file_type.kind}
+    if file_type.subtype:
+        keys.add(f"{file_type.kind}:{file_type.subtype}")
+    return keys
 
 
 def registry() -> list[Analyzer]:
@@ -83,6 +93,7 @@ def registry() -> list[Analyzer]:
         capa_analyzer,
         floss_analyzer,
         lnk,
+        mail,
         office,
         pdf,
         pe,
@@ -131,6 +142,10 @@ def registry() -> list[Analyzer]:
             "lnk", "Shortcut target, arguments and LOLBin use", lnk.analyze_lnk,
             kinds=frozenset({"lnk"}), requires=("LnkParse3",),
             install_hint="pip install 'unopened[lnk]'",
+        ),
+        Analyzer(
+            "email", "Email headers, sender authentication, links and attachments",
+            mail.analyze_email, kinds=frozenset({"email", "ole:outlook"}),
         ),
         Analyzer(
             "archive", "Archive and disk image members", archive.analyze_archive,

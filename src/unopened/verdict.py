@@ -28,7 +28,7 @@ CONFIDENCE_ORDER = ["low", "medium", "high"]
 # The analyzer whose failure means the file's type was not really examined.
 TYPE_ANALYZER = {
     "pe": "pe", "ole": "office", "ooxml": "office", "lnk": "lnk", "script": "script",
-    "pdf": "pdf", "zip": "archive", "7z": "archive", "iso": "archive",
+    "pdf": "pdf", "zip": "archive", "7z": "archive", "iso": "archive", "email": "email",
 }
 # Optional rule-based analyzers; when they did not run, "no findings" confidence drops.
 RULE_ANALYZERS = {"yara"}
@@ -240,8 +240,10 @@ RULES: list[Rule] = [
          "A document loads a remote template or object when opened (template injection).",
          lambda f: _titles(f.with_id("office.remote_load"))),
     Rule("V-MAL-06", MALICIOUS, "high",
-         "A document or PDF embeds a file with an executable extension.",
-         lambda f: _titles(f.with_id("office.embedded_executable", "pdf.embedded_executable"))),
+         "A document or PDF embeds, or an email attaches, a file with an executable "
+         "extension.",
+         lambda f: _titles(f.with_id("office.embedded_executable", "pdf.embedded_executable",
+                                     "email.attachment_executable"))),
     Rule("V-MAL-07", MALICIOUS, "high",
          "A script (or PDF JavaScript) both downloads content and runs code, after "
          "deobfuscation.", lambda f: _titles(f.with_id("script.download_execute",
@@ -250,14 +252,14 @@ RULES: list[Rule] = [
          "A PDF contains a Launch action that can start a program.",
          lambda f: _titles(f.with_id("pdf.launch"))),
     Rule("V-MAL-09", MALICIOUS, "medium",
-         "A member of this archive, disk image or PDF was judged malicious.",
+         "A member of this archive, disk image, PDF or email was judged malicious.",
          _children(MALICIOUS)),
     Rule("V-MAL-10", MALICIOUS, "medium",
          "Two or more HIGH findings from different analyzers.", _two_high),
     Rule("V-SUS-01", SUSPICIOUS, "medium",
          "At least one HIGH finding.", lambda f: _titles(f.at(Severity.HIGH))),
     Rule("V-SUS-02", SUSPICIOUS, "medium",
-         "A member of this archive, disk image or PDF was judged suspicious.",
+         "A member of this archive, disk image, PDF or email was judged suspicious.",
          _children(SUSPICIOUS)),
     Rule("V-REP-03", SUSPICIOUS, "low",
          f"VirusTotal reports between 1 and {VT_MALICIOUS_THRESHOLD - 1} engines detecting this "
@@ -276,7 +278,7 @@ RULES: list[Rule] = [
          "None of the archive's members could be extracted (limits, encryption or damage).",
          _nothing_extracted),
     Rule("V-CNA-04", COULD_NOT, "medium",
-         "A member of this archive, disk image or PDF could not be analyzed.",
+         "A member of this archive, disk image, PDF or email could not be analyzed.",
          _children(COULD_NOT)),
     Rule("V-NF-01", NO_FINDINGS, "medium",
          "No rule above matched: nothing at MEDIUM or above, or not enough to call it "
@@ -384,7 +386,7 @@ def render_markdown() -> str:
         "verdict.",
         "- **Malicious** and **suspicious** keep their confidence when other checks are "
         "incomplete (the evidence found still stands) but the report notes the gaps.",
-        "- Archives, disk images and PDFs take the most severe verdict among their own "
+        "- Archives, disk images, PDFs and emails take the most severe verdict among their own "
         "findings and their members (V-MAL-09, V-SUS-02, V-CNA-04).",
         "",
         "Finding IDs used by these rules (for example `office.autoexec`) are stable and "

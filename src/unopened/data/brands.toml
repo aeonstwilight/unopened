@@ -1,0 +1,79 @@
+# Brands phishing emails impersonate most often, with the domains each one really sends
+# mail and hosts sign-in pages from. Edit freely.
+#
+# The email analyzer flags a sender, reply-to or link domain that contains a brand name
+# (after undoing common look-alike swaps such as 0 -> o, 1 -> l, rn -> m, vv -> w) but
+# is not one of that brand's domains or a subdomain of one. The name must start a label
+# or follow a hyphen, dot or digit ("secure-paypal", "microsoftonline-login"), so words
+# that merely contain it ("pineapple") do not match. Keep names at five or more
+# characters: short ones (ups, dhl, zoom) match too much.
+
+[microsoft]
+domains = ["microsoft.com", "office.com", "office365.com", "outlook.com", "live.com",
+           "microsoftonline.com", "sharepoint.com", "onmicrosoft.com", "hotmail.com",
+           "msn.com", "azure.com", "windows.net", "microsoft365.com", "cloud.microsoft"]
+
+[office365]
+domains = ["office365.com", "office.com", "microsoft.com", "microsoftonline.com"]
+
+[outlook]
+domains = ["outlook.com", "office.com", "microsoft.com", "live.com"]
+
+[sharepoint]
+domains = ["sharepoint.com", "microsoft.com"]
+
+[docusign]
+domains = ["docusign.com", "docusign.net"]
+
+[paypal]
+domains = ["paypal.com", "paypal-communication.com", "paypalobjects.com"]
+
+[apple]
+domains = ["apple.com", "icloud.com", "me.com"]
+
+[icloud]
+domains = ["icloud.com", "apple.com"]
+
+[amazon]
+domains = ["amazon.com", "amazonaws.com", "amazon.co.uk", "amazon.de", "amazon.ca",
+           "amazonses.com", "a2z.com"]
+
+[google]
+domains = ["google.com", "gmail.com", "googlemail.com", "googleusercontent.com",
+           "googleapis.com", "youtube.com", "goo.gl", "g.co"]
+
+[dropbox]
+domains = ["dropbox.com", "dropboxmail.com", "dropboxusercontent.com"]
+
+[adobe]
+domains = ["adobe.com", "adobesign.com", "adobelogin.com", "echosign.com"]
+
+[netflix]
+domains = ["netflix.com"]
+
+[linkedin]
+domains = ["linkedin.com", "licdn.com"]
+
+[fedex]
+domains = ["fedex.com"]
+
+[wellsfargo]
+domains = ["wellsfargo.com", "wf.com"]
+
+[chase]
+domains = ["chase.com", "jpmorgan.com", "jpmorganchase.com"]
+
+[bankofamerica]
+domains = ["bankofamerica.com", "bofa.com"]
+
+[intuit]
+domains = ["intuit.com", "quickbooks.com", "turbotax.com"]
+
+[quickbooks]
+domains = ["quickbooks.com", "intuit.com"]
+
+[coinbase]
+domains = ["coinbase.com"]
+
+[wetransfer]
+domains = ["wetransfer.com", "we.tl"]
