@@ -13,6 +13,13 @@ a skipped check never passes for a clean result.
 
 ## What a report looks like
 
+![HTML report for a synthetic phishing email: MALICIOUS banner and key findings](docs/images/report-email.png)
+
+Full example reports, generated from the synthetic test fixtures by
+`scripts/make_examples.py`: [phishing email](examples/phishing-email.md) (also as
+[HTML](examples/phishing-email.html), download and open it), [shortcut lure](examples/shortcut.md),
+[macro document](examples/macro-document.md).
+
 The top of the report for a synthetic test shortcut (built by `tests/fixtures/lnk.py`;
 its "payload" is `Write-Host fixture`), named to look like a PDF invoice:
 
@@ -159,6 +166,20 @@ pip install --force-reinstall --no-deps "oscrypto @ git+https://github.com/wbond
 
 Without that fix the tool still runs, but the report marks the signature check
 **UNAVAILABLE** and explains why.
+
+**Docker.** The image has every analyzer, including the oscrypto fix, and runs as an
+unprivileged user. Run it with `--network none`: the container then cannot reach anything
+at all, which makes the "never fetches, never sends" guarantee hold even against a bug.
+
+```sh
+docker build -t unopened .
+docker run --rm --network none -v "$PWD:/work" unopened triage /work/suspicious.bin
+docker run --rm --network none -v "$PWD:/work" unopened \
+    triage /work/reported.eml --format all --out /work/reports
+```
+
+The image is about 1 GB, mostly capa and FLOSS (vivisect). `--reputation` is the one
+option that needs the network.
 
 ## Usage
 
