@@ -70,7 +70,8 @@ removed because it flagged Microsoft's own scripts.
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[all]"
 unopened triage suspicious.bin                              # Markdown report
-unopened triage suspicious.bin --format both --out reports/ # Markdown and JSON
+unopened triage reported.eml --format html --out reports/   # a page to open in a browser
+unopened triage inbox-export/ --out reports/                # every file, plus summary.md
 ```
 
 For capa and YARA, point the tool at your own rules (see [Rules](#rules)). Run it on
@@ -165,8 +166,22 @@ Without that fix the tool still runs, but the report marks the signature check
 unopened triage suspicious.bin                       # Markdown to stdout
 unopened triage suspicious.bin --format json         # JSON to stdout
 unopened triage suspicious.bin --format both --out reports/   # reports/<sha256>.md and .json
+unopened triage suspicious.bin --format html --out reports/   # reports/<sha256>.html
+unopened triage suspicious.bin --format all --out reports/    # md, json and html
 unopened triage suspicious.bin --yara-rules ~/rules/yara --capa-rules ~/rules/capa
+unopened triage samples/ --out reports/ --format all          # a whole folder (below)
 ```
+
+**HTML report.** The same content as the Markdown report, as one self-contained page: a
+color-coded verdict banner, sections that fold, and severity-colored findings. It has no
+scripts, a Content-Security-Policy that blocks every network load, and no live links
+(it is built from the already-defanged Markdown), so it is safe to open and to share on
+screen.
+
+**Folder mode.** Give a folder instead of a file (with `--out`) and every regular file in
+it, subfolders included, gets its own report. Symbolic links are skipped. `summary.md`
+(and `summary.html` with `--format html` or `all`) lists every file, worst verdict first,
+with its type, verdict, deciding rule, top reason and report file name.
 
 ### Rules
 

@@ -1,6 +1,7 @@
 """Command-line interface.
 
-    unopened triage FILE [--format md|json|both] [--out DIR] [--allowlist PATH] ...
+    unopened triage FILE [--format md|json|html|both|all] [--out DIR] [--allowlist PATH] ...
+    unopened triage DIR --out OUT   (every file in DIR, plus summary.md / summary.html)
 
 Exit codes: 0 report written (whatever it found), 2 usage or configuration error,
 3 the input could not be read.
@@ -19,6 +20,7 @@ from .analyzers import Options
 from .extraction import Limits
 from .indicators.allowlist import Allowlist, AllowlistError
 from .pipeline import triage
+from .report import html as html_report
 from .report import json_report, markdown
 
 EXIT_OK, EXIT_USAGE, EXIT_INPUT = 0, 2, 3
@@ -62,9 +64,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"unopened {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     t = sub.add_parser("triage", help="analyze one file and write a report")
-    t.add_argument("file", type=Path, help="file to analyze")
-    t.add_argument("--format", choices=["md", "json", "both"], default="md",
-                   help="report format (default: md)")
+    t.add_argument("file", type=Path,
+                   help="file to analyze, or a folder to analyze every file in it (needs --out)")
+    t.add_argument("--format", choices=["md", "json", "html", "both", "all"], default="md",
+                   help="report format: md, json, html, both (md and json) or all "
+                        "(default: md)")
     t.add_argument("--out", type=Path,
                    help="directory to write <sha256>.md / <sha256>.json into; "
                         "without it the report goes to standard output")
@@ -120,11 +124,16 @@ def error(message: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.format == "both" and args.out is None:
-        error("--format both needs --out DIR")
+    if args.format in ("both", "all") and args.out is None:
+        error(f"--format {args.format} needs --out DIR")
         return EXIT_USAGE
 
     path: Path = args.file
+    if path.is_dir():
+        if args.out is None:
+            error("triaging a folder needs --out DIR")
+            return EXIT_USAGE
+        return _batch(args, path)
     try:
         st = path.stat()
     except OSError as exc:
@@ -144,13 +153,119 @@ def main(argv: list[str] | None = None) -> int:
         error(f"cannot read {path}: {exc.strerror or exc}")
         return EXIT_INPUT
 
+    options = _options(args)
+    if options is None:
+        return EXIT_USAGE
+    report = triage(path, options)
+    outputs = _render(report, args.format)
+    if args.out is None:
+        sys.stdout.write(outputs[0][1])
+        return EXIT_OK
+    try:
+        _write(report, outputs, args.out)
+    except OSError as exc:
+        error(f"cannot write report: {exc}")
+        return EXIT_USAGE
+    return EXIT_OK
+
+
+def _render(report, fmt: str) -> list[tuple[str, str]]:
+    outputs = []
+    if fmt in ("md", "both", "all"):
+        outputs.append(("md", markdown.render(report)))
+    if fmt in ("json", "both", "all"):
+        outputs.append(("json", json_report.render(report)))
+    if fmt in ("html", "all"):
+        outputs.append(("html", html_report.render(report)))
+    return outputs
+
+
+def _write(report, outputs: list[tuple[str, str]], out: Path) -> str:
+    """Write the report files; returns the stem (the file's SHA256)."""
+    out.mkdir(parents=True, exist_ok=True)
+    stem = report.hashes.get("sha256") or "report"
+    if report.hunt:
+        from .hunt import render_text
+
+        outputs = outputs + [("hunt.txt", render_text(report.hunt, report.file_name))]
+    for ext, text in outputs:
+        target = out / f"{stem}.{ext}"
+        target.write_text(text, encoding="utf-8")
+        print(f"wrote {target}", file=sys.stderr)
+    return stem
+
+
+VERDICT_ORDER = {"malicious": 0, "suspicious": 1, "could not analyze": 2, "no findings": 3}
+
+
+def _batch(args: argparse.Namespace, folder: Path) -> int:
+    """Triage every regular file under `folder` (symbolic links are skipped), then write
+    summary.md (and summary.html with --format html or all), worst verdict first."""
+    from .indicators.defang import defang_text
+
+    options = _options(args)
+    if options is None:
+        return EXIT_USAGE
+    files = sorted(p for p in folder.rglob("*") if p.is_file() and not p.is_symlink())
+    rows = []
+    for path in files:
+        rel = str(path.relative_to(folder))
+        size = path.stat().st_size
+        if size > args.max_size:
+            rows.append({"file": rel, "type": "", "verdict": "could not analyze",
+                         "confidence": "high", "rule": "--max-size",
+                         "reason": f"{size:,} bytes, larger than --max-size", "report": ""})
+            continue
+        print(f"triaging {rel}", file=sys.stderr)
+        report = triage(path, options)
+        report.file_name = rel
+        try:
+            stem = _write(report, _render(report, args.format), args.out)
+        except OSError as exc:
+            error(f"cannot write report: {exc}")
+            return EXIT_USAGE
+        v = report.verdict
+        reasons = next((r["evidence"] for r in v.get("reasons", []) if r["rule"] == v["rule"]),
+                       [])
+        ext = "html" if args.format == "html" else ("json" if args.format == "json" else "md")
+        rows.append({
+            "file": defang_text(rel), "type": report.file_type.description
+            if report.file_type else "unknown",
+            "verdict": v["value"], "confidence": v["confidence"], "rule": v["rule"],
+            "reason": defang_text(str(reasons[0])) if reasons else "",
+            "report": f"{stem}.{ext}",
+        })
+    rows.sort(key=lambda r: (VERDICT_ORDER.get(r["verdict"], 9), r["file"]))
+    title = f"unopened summary: {len(rows)} file(s) in {folder.name}"
+    lines = [f"# {title}", "", "| File | Type | Verdict | Top reason | Report |",
+             "|---|---|---|---|---|"]
+    for r in rows:
+        lines.append("| " + " | ".join([
+            markdown.code(r["file"]), markdown.esc(r["type"]),
+            f"**{r['verdict'].upper()}** ({r['confidence']}, {markdown.esc(r['rule'])})",
+            markdown.esc(r["reason"]), markdown.code(r["report"]) if r["report"] else "",
+        ]) + " |")
+    try:
+        (args.out / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"wrote {args.out / 'summary.md'}", file=sys.stderr)
+        if args.format in ("html", "all"):
+            (args.out / "summary.html").write_text(html_report.summary_html(rows, title),
+                                                   encoding="utf-8")
+            print(f"wrote {args.out / 'summary.html'}", file=sys.stderr)
+    except OSError as exc:
+        error(f"cannot write summary: {exc}")
+        return EXIT_USAGE
+    return EXIT_OK
+
+
+def _options(args: argparse.Namespace) -> Options | None:
     try:
         allowlist = Allowlist.load(args.allowlist)
     except AllowlistError as exc:
         error(str(exc))
-        return EXIT_USAGE
+        return None
 
-    options = Options(
+    return Options(
         min_string_length=args.min_string_length,
         max_strings=args.max_strings,
         timeout=args.timeout,
@@ -169,29 +284,3 @@ def main(argv: list[str] | None = None) -> int:
         hunt=not args.no_hunt,
         hunt_days=args.hunt_days,
     )
-    report = triage(path, options)
-
-    outputs = []
-    if args.format in ("md", "both"):
-        outputs.append(("md", markdown.render(report)))
-    if args.format in ("json", "both"):
-        outputs.append(("json", json_report.render(report)))
-
-    if args.out is None:
-        sys.stdout.write(outputs[0][1])
-        return EXIT_OK
-    try:
-        args.out.mkdir(parents=True, exist_ok=True)
-        stem = report.hashes.get("sha256") or "report"
-        if report.hunt:
-            from .hunt import render_text
-
-            outputs.append(("hunt.txt", render_text(report.hunt, report.file_name)))
-        for ext, text in outputs:
-            target = args.out / f"{stem}.{ext}"
-            target.write_text(text, encoding="utf-8")
-            print(f"wrote {target}", file=sys.stderr)
-    except OSError as exc:
-        error(f"cannot write report: {exc}")
-        return EXIT_USAGE
-    return EXIT_OK

@@ -44,9 +44,37 @@ def test_missing_file(tmp_path, capsys):
     assert "cannot read" in capsys.readouterr().err
 
 
-def test_directory_rejected(tmp_path, capsys):
-    assert cli.main(["triage", str(tmp_path)]) == cli.EXIT_INPUT
-    assert "not a regular file" in capsys.readouterr().err
+def test_directory_needs_out(tmp_path, capsys):
+    assert cli.main(["triage", str(tmp_path)]) == cli.EXIT_USAGE
+    assert "needs --out" in capsys.readouterr().err
+
+
+def test_folder_mode_writes_reports_and_summary(tmp_path, fixtures, lnk_fx, mail_fx):
+    folder = tmp_path / "reported"
+    (folder / "sub").mkdir(parents=True)
+    (folder / "notes.txt").write_bytes(b"meeting at three")
+    (folder / "sub" / "Invoice.pdf.lnk").write_bytes(lnk_fx.encoded_powershell())
+    (folder / "phish.eml").write_bytes(mail_fx.phish_eml())
+    out = tmp_path / "out"
+    assert cli.main(["triage", str(folder), "--out", str(out), "--format", "all"]) == 0
+    summary = (out / "summary.md").read_text()
+    rows = [line for line in summary.splitlines() if line.startswith("| `")]
+    assert len(rows) == 3
+    assert "MALICIOUS" in rows[0] and "MALICIOUS" in rows[1]  # worst first
+    assert "notes.txt" in rows[2]
+    assert "https://" not in summary
+    page = (out / "summary.html").read_text()
+    assert "<script" not in page and "default-src 'none'" in page
+    assert len(list(out.glob("*.html"))) == 4  # three reports and the summary
+
+
+def test_html_format(make_file, mail_fx, tmp_path):
+    path = make_file("phish.eml", mail_fx.phish_eml())
+    out = tmp_path / "out"
+    assert cli.main(["triage", str(path), "--out", str(out), "--format", "html"]) == 0
+    (page,) = list(out.glob("*.html"))
+    text = page.read_text()
+    assert 'class="banner mal"' in text
 
 
 def test_oversized_file_rejected(make_file, capsys):

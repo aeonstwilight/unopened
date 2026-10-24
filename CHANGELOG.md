@@ -3,6 +3,15 @@
 Milestones are defined in `CLAUDE.md`. Each was planned, approved and merged as its own
 pull request.
 
+## M8: HTML report and folder mode
+
+- `--format html` writes a self-contained page built from the Markdown report (same
+  content, already defanged): verdict banner, folding sections, severity colors, no
+  scripts, a Content-Security-Policy that blocks all network loads. `--format all`
+  writes md, json and html.
+- `unopened triage FOLDER --out DIR` triages every file under the folder and writes
+  `summary.md` (and `summary.html`), worst verdict first.
+
 ## M7: email input
 
 - **Email analyzer** for `.eml` (identified from content, not the extension) and Outlook
