@@ -442,3 +442,9 @@ crash, or when the share exceeds the optional limit.
 
 Test with real malware only inside an isolated analysis VM (for example REMnux) with no
 shared folders or clipboard. Keep samples zipped with the password `infected`.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Optional analyzers (capa, FLOSS, YARA, oletools and the
+others under `[project.optional-dependencies]`) are installed separately and keep their
+own licenses; none of their code or rules is included in this repository.
