@@ -3,6 +3,19 @@
 Milestones are defined in `CLAUDE.md`. Each was planned, approved and merged as its own
 pull request.
 
+## M9: damaged-input testing
+
+- `tests/test_fuzz.py`: every fixture damaged in seeded ways (truncation, bit flips,
+  extreme size fields, duplicated, removed and zeroed chunks), run through the pipeline
+  and all three writers; fails on any crash or any silent check failure. 4 rounds per
+  fixture in CI, `UNOPENED_FUZZ_ROUNDS` for more. 60 rounds (about 1,000 files) pass.
+- ZIP: a damaged or missing central directory no longer stops the archive analyzer;
+  members are recovered from local file headers (stored and deflated), reported PARTIAL
+  with a MEDIUM `archive.damaged_directory` finding. One damaged member no longer stops
+  the others (pyzipper's own exception types were escaping).
+- TLSH: input with too little variation is listed under Not checked instead of failing
+  the analyzer.
+
 ## M8: HTML report and folder mode
 
 - `--format html` writes a self-contained page built from the Markdown report (same

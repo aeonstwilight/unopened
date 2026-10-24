@@ -32,8 +32,11 @@ def tlsh_hash(path: Path) -> str | None:
     with path.open("rb") as f:
         while chunk := f.read(CHUNK):
             h.update(chunk)
-    h.final()
-    digest = h.hexdigest()
+    try:
+        h.final()
+        digest = h.hexdigest()
+    except ValueError:  # "not enough variation in input"
+        return None
     if not digest or digest == "TNULL":
         return None
     return digest
