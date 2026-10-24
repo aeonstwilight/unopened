@@ -1,0 +1,9 @@
+.git
+.venv
+**/__pycache__
+tests
+validation
+validation-results
+reports
+samples
+*.zip

@@ -13,6 +13,13 @@ a skipped check never passes for a clean result.
 
 ## What a report looks like
 
+![HTML report for a synthetic phishing email: MALICIOUS banner and key findings](docs/images/report-email.png)
+
+Full example reports, generated from the synthetic test fixtures by
+`scripts/make_examples.py`: [phishing email](examples/phishing-email.md) (also as
+[HTML](examples/phishing-email.html), download and open it), [shortcut lure](examples/shortcut.md),
+[macro document](examples/macro-document.md).
+
 The top of the report for a synthetic test shortcut (built by `tests/fixtures/lnk.py`;
 its "payload" is `Write-Host fixture`), named to look like a PDF invoice:
 
@@ -70,7 +77,8 @@ removed because it flagged Microsoft's own scripts.
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[all]"
 unopened triage suspicious.bin                              # Markdown report
-unopened triage suspicious.bin --format both --out reports/ # Markdown and JSON
+unopened triage reported.eml --format html --out reports/   # a page to open in a browser
+unopened triage inbox-export/ --out reports/                # every file, plus summary.md
 ```
 
 For capa and YARA, point the tool at your own rules (see [Rules](#rules)). Run it on
@@ -159,14 +167,42 @@ pip install --force-reinstall --no-deps "oscrypto @ git+https://github.com/wbond
 Without that fix the tool still runs, but the report marks the signature check
 **UNAVAILABLE** and explains why.
 
+**Docker.** The image has every analyzer, including the oscrypto fix, and runs as an
+unprivileged user. Run it with `--network none`: the container then cannot reach anything
+at all, which makes the "never fetches, never sends" guarantee hold even against a bug.
+
+```sh
+docker build -t unopened .
+docker run --rm --network none -v "$PWD:/work" unopened triage /work/suspicious.bin
+docker run --rm --network none -v "$PWD:/work" unopened \
+    triage /work/reported.eml --format all --out /work/reports
+```
+
+The image is about 1 GB, mostly capa and FLOSS (vivisect). `--reputation` is the one
+option that needs the network.
+
 ## Usage
 
 ```sh
 unopened triage suspicious.bin                       # Markdown to stdout
 unopened triage suspicious.bin --format json         # JSON to stdout
 unopened triage suspicious.bin --format both --out reports/   # reports/<sha256>.md and .json
+unopened triage suspicious.bin --format html --out reports/   # reports/<sha256>.html
+unopened triage suspicious.bin --format all --out reports/    # md, json and html
 unopened triage suspicious.bin --yara-rules ~/rules/yara --capa-rules ~/rules/capa
+unopened triage samples/ --out reports/ --format all          # a whole folder (below)
 ```
+
+**HTML report.** The same content as the Markdown report, as one self-contained page: a
+color-coded verdict banner, sections that fold, and severity-colored findings. It has no
+scripts, a Content-Security-Policy that blocks every network load, and no live links
+(it is built from the already-defanged Markdown), so it is safe to open and to share on
+screen.
+
+**Folder mode.** Give a folder instead of a file (with `--out`) and every regular file in
+it, subfolders included, gets its own report. Symbolic links are skipped. `summary.md`
+(and `summary.html` with `--format html` or `all`) lists every file, worst verdict first,
+with its type, verdict, deciding rule, top reason and report file name.
 
 ### Rules
 
@@ -353,7 +389,7 @@ their members.
 | YARA | Every `.yar`/`.yara` file under the rules path. The namespace is the file's relative path. Reports rule, tags, meta and matched strings (capped, shown as text or hex). A file that fails to compile is reported and the others still run. Severity comes from a rule's `severity` or `score` meta. |
 | Office (OLE and OOXML) | VBA macros (module source), auto-run triggers, suspicious keywords, VBA stomping, Excel 4.0 (XLM) macro sheets, embedded OLE packages (with file names), ActiveX parts, DDE fields, and external relationships such as remote template injection. Legacy files get a subtype (Word/Excel/PowerPoint/MSI/MSG) for extension checks. |
 | LNK | Target, arguments, working directory, icon, comment and window style. Flags LOLBin targets and arguments (`data/lolbins.toml`, editable), encoded PowerShell (decoded as text for display only), hidden windows, whitespace padding, borrowed icons, network targets, and data appended after the shortcut. |
-| Archives and disk images | ZIP (plain, ZipCrypto, AES), 7z (including encrypted headers) and ISO (Joliet, Rock Ridge, UDF, ISO 9660). Tries no password, then `infected`, then any `--archive-password`. Each member is triaged recursively with the full pipeline. Flags path-traversal and deceptive names, hidden files in images, shortcuts next to hidden files, programs inside archives, unknown passwords, decompression bombs and limits reached. |
+| Archives and disk images | ZIP (plain, ZipCrypto, AES), 7z (including encrypted headers) and ISO (Joliet, Rock Ridge, UDF, ISO 9660). A ZIP whose central directory is damaged or missing is recovered from its local file headers and reported as damaged, since Windows and 7-Zip open such files anyway. Tries no password, then `infected`, then any `--archive-password`. Each member is triaged recursively with the full pipeline. Flags path-traversal and deceptive names, hidden files in images, shortcuts next to hidden files, programs inside archives, unknown passwords, decompression bombs and limits reached. |
 | Scripts | PowerShell, JavaScript/JScript, VBScript and batch. Deobfuscation by text transformation only (base64 including `-EncodedCommand`, character codes, string concatenation), repeated up to five rounds. Batch variable references (`%v%`, `%v:~n,m%`) are expanded the way cmd.exe would, as text. Keywords per language from `data/script_keywords.toml` (editable), plus a combined "downloads and runs code" finding. Obfuscation is judged by shape (chained char codes, joined literals, variable substrings), not by counting single calls. Decoded text feeds the indicator list. |
 | Email (.eml, Outlook .msg) | Headers (From, Reply-To, Return-Path, Received chain, Message-ID); SPF, DKIM and DMARC from the topmost `Authentication-Results` header only, since the receiving server adds it and lower ones can be forged by the sender; a display name showing another address or a brand the address does not belong to; Reply-To and Return-Path in a different organization; sender and link domains imitating a brand in `data/brands.toml` (editable; look-alike swaps such as `0`/`o` and `rn`/`m` undone first) or using punycode; links whose visible text names a different site, links to raw IPs or `javascript:`/`data:` URLs, forms (with or without a password field), meta refreshes and frames in the HTML body; attachments with runnable or HTML extensions. HTML is tokenized for tags, never rendered, and no link is followed. Attachments, including attached messages, are extracted within the limits and triaged recursively. For `.msg` files, the saved transport headers are read when present (otherwise the sender comes from MAPI properties and authentication is listed as not checked). |
 | PDF | Raw keyword counts with `#xx`-escaped names decoded (and flagged), then JavaScript source with its trigger (OpenAction, /AA), Launch actions, URIs, XFA and rich media. Attachments are extracted within the limits and triaged recursively. |
@@ -412,6 +448,17 @@ ruff check src tests
 GitHub Actions (`.github/workflows/ci.yml`) runs the same lint and tests, plus a check
 that `docs/verdict-rules.md` is current, on Python 3.11 and 3.13 for every pull request
 and every push to `main`.
+
+**Damaged-input testing.** `tests/test_fuzz.py` takes every synthetic fixture (PE, OLE and
+OOXML documents, LNK, ZIP, 7z, ISO, PDF, EML, MSG, scripts) and damages it the way hostile
+and corrupt files are damaged: truncated, bits flipped, size fields set to extremes,
+chunks duplicated, removed or zeroed. Each damaged file runs through the whole pipeline
+and all three report writers. The test fails if anything crashes, or if a check fails
+without the report saying so. Mutations are seeded, so every failure reproduces. CI runs
+4 rounds per fixture; `UNOPENED_FUZZ_ROUNDS=60 pytest tests/test_fuzz.py` runs more (60
+rounds, about 1,000 damaged files, passed before this was merged). The first large run
+found that a ZIP with a damaged central directory stopped the archive analyzer; such
+archives are now recovered from their local headers (Windows and 7-Zip open them too).
 
 Fixtures are built byte by byte by `tests/fixtures/`:
 - `build.py`: minimal PE images whose only code is `ret`, plus one that builds a URL on

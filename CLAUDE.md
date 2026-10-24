@@ -55,8 +55,11 @@ It is a new, standalone project. Do not reference, copy from, or model it on any
 - **M5**: Validation against real samples and a benign corpus (see "M5: Validation plan" below). No new analyzers in this milestone; only fixes for gaps the validation finds.
 - **M6**: Hardening that needs no analysis VM: CI (lint, tests and verdict-docs check on Python 3.11 and 3.13), capa rule caching with a file-scope fallback when capa times out, and FLOSS decoded/stack/tight strings for PE files. FLOSS output feeds indicators only and stays out of the verdict until a benign-corpus rerun clears it.
 - **M7**: Email input. `.eml` identified from content and Outlook `.msg` (OLE, subtype `outlook`): headers, SPF/DKIM/DMARC from the topmost `Authentication-Results` header, sender, reply-to and display-name checks, look-alike domains from an editable brand list, links (visible text vs destination), forms, and attachments extracted within the limits and triaged recursively. Static only: HTML is tokenized, never rendered; no link is followed. Email hunt queries (Defender `EmailEvents`/`EmailUrlInfo`, Splunk CIM Email, ECS `email.*`). Synthetic fixtures in `tests/fixtures/mail.py`.
+- **M8**: HTML report (`--format html|all`, built from the Markdown report so it inherits defanging; no scripts, CSP blocks network loads) and folder mode (`triage DIR --out OUT`, per-file reports plus `summary.md`/`summary.html`, worst verdict first).
+- **M9**: Damaged-input testing (`tests/test_fuzz.py`, seeded mutations of every fixture through the pipeline and all writers; no crash and no silent failure allowed), plus the fixes it found: damaged-ZIP recovery from local headers and TLSH on low-variation input.
+- **M10**: Presentation: example reports generated from fixtures (`scripts/make_examples.py`, reports only, never inputs), README screenshot, Dockerfile (unprivileged, run with `--network none`) with a CI build-and-smoke job.
 
-M1 to M7 are complete. Next work needs the analysis VM: a fresh holdout set, a benign-corpus rerun with FLOSS and the capa fallback, and patterns for compiled loaders (see "What remains" in `docs/validation.md`).
+M1 to M10 are complete. Next work needs the analysis VM: a fresh holdout set, a benign-corpus rerun with FLOSS and the capa fallback, and patterns for compiled loaders (see "What remains" in `docs/validation.md`).
 
 At the start of each milestone, plan first: propose structure, dependencies and tests, then wait for approval before writing code. Finish each milestone with passing tests and a commit.
 
@@ -121,5 +124,5 @@ Goal: prove the tool is useful on real files, not only correct on synthetic fixt
 
 - Dynamic analysis or sandboxing of any kind
 - Machine-learning verdicts
-- A web UI
+- A web UI (the static HTML report is not one: no server, no scripts)
 - Automatic file submission to any third-party service

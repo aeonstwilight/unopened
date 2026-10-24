@@ -8,6 +8,7 @@ archive is ever opened by the operating system or run.
 
 from __future__ import annotations
 
+import struct
 import zipfile
 import zlib
 from typing import Any
@@ -57,7 +58,18 @@ def _zip(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
         opener = zipfile.ZipFile
         out.not_checked.append("AES-encrypted ZIP members (pyzipper not installed)")
     passwords = _passwords(ctx)
-    with opener(ctx.path) as zf:
+    try:
+        zf_cm = opener(ctx.path)
+    except Exception as exc:  # pyzipper raises its own BadZipFile, not zipfile's
+        # The central directory is damaged or missing. Windows Explorer and 7-Zip still
+        # open many such files from their local headers, and attackers rely on scanners
+        # that give up, so recover what the local headers describe.
+        out.errors.append(f"central directory unreadable ({type(exc).__name__}: {exc}); "
+                          "members recovered from local file headers")
+        out.data["recovered_from_local_headers"] = True
+        _zip_local_headers(ctx.path.read_bytes(), w, out)
+        return
+    with zf_cm as zf:
         infos = [i for i in zf.infolist() if not i.is_dir()]
         out.data["member_count"] = len(infos)
         for n, info in enumerate(infos):
@@ -82,9 +94,62 @@ def _zip(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
                     if not _decrypt_zip_member(zf, info, passwords, sink, out):
                         sink.fail(f"encrypted; none of the {len(passwords)} password(s) worked")
                         sink.entry["password_unknown"] = True
-            except (zipfile.BadZipFile, RuntimeError, NotImplementedError, OSError, EOFError,
-                    zlib.error, ValueError) as exc:
+            except Exception as exc:  # one damaged member must not stop the others
                 out.errors.append(f"member {info.filename}: {type(exc).__name__}: {exc}")
+
+
+LOCAL_HEADER = struct.Struct("<4sHHHHHIIIHH")
+
+
+def _zip_local_headers(data: bytes, w: MemberWriter, out: AnalyzerOutput) -> None:
+    """Walk local file headers (PK\\x03\\x04) when the central directory cannot be read.
+    Stored and deflated members are recovered; encrypted members, other compression
+    methods and members whose sizes are only in a trailing data descriptor are listed
+    as skipped."""
+    pos = data.find(b"PK\x03\x04")
+    count = 0
+    while pos != -1 and count < MAX_LISTED and pos + LOCAL_HEADER.size <= len(data):
+        (_, _, flags, method, _, _, _, csize, usize, nlen, xlen) = LOCAL_HEADER.unpack_from(
+            data, pos)
+        start = pos + LOCAL_HEADER.size + nlen + xlen
+        name = data[pos + LOCAL_HEADER.size:pos + LOCAL_HEADER.size + nlen].decode(
+            "utf-8" if flags & 0x800 else "cp437", errors="replace")
+        count += 1
+        nxt = data.find(b"PK\x03\x04", max(start, pos + 4))
+        if name.endswith("/"):
+            pos = nxt
+            continue
+        skip = None
+        if flags & 0x1:
+            skip = "encrypted member in a damaged archive"
+        elif flags & 0x8 and csize == 0:
+            skip = "sizes only in a data descriptor; not recovered from a damaged archive"
+        elif method not in (0, 8):
+            skip = f"compression method {method} not supported for damaged archives"
+        elif start + csize > len(data):
+            skip = "member data runs past the end of the file (truncated)"
+        if skip:
+            w.record(name, usize, skipped=f"not extracted: {skip}", compressed=csize)
+            pos = nxt
+            continue
+        sink = w.open(name, usize, csize, recovered=True)
+        if sink is not None:
+            try:
+                with sink:
+                    raw = data[start:start + csize]
+                    if method == 0:
+                        for i in range(0, len(raw), CHUNK):
+                            sink.write(raw[i:i + CHUNK])
+                    else:
+                        d = zlib.decompressobj(-15)
+                        chunk = d.decompress(raw, CHUNK)
+                        while chunk:
+                            sink.write(chunk)
+                            chunk = d.decompress(d.unconsumed_tail, CHUNK)
+            except zlib.error as exc:
+                out.errors.append(f"member {name}: {type(exc).__name__}: {exc}")
+        pos = data.find(b"PK\x03\x04", start + csize) if start + csize > pos else nxt
+    out.data["member_count"] = count
 
 
 def _copy(stream: Any, sink: Any) -> None:
@@ -330,6 +395,13 @@ def _iso(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
 
 def _findings(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
     members = w.members
+    if out.data.get("recovered_from_local_headers"):
+        out.findings.append(Finding(
+            "archive.damaged_directory", Severity.MEDIUM,
+            "ZIP central directory is damaged; members recovered from local headers",
+            "Windows and 7-Zip open many damaged archives anyway, and malformed ZIPs are a "
+            "known way past scanners that give up on them.",
+        ))
     traversal = [m["name"] for m in members
                  if {"path_traversal", "absolute_path"} & set(m["flags"])]
     if traversal:

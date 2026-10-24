@@ -189,3 +189,29 @@ def test_damaged_zip_member_is_reported(make_file, arch_fx):
     r = triage(make_file("d.zip", bytes(data)))
     a = archive(r)
     assert a.status == Status.PARTIAL or a.status == Status.ERROR
+
+
+def test_damaged_central_directory_recovers_members(make_file, arch_fx, lnk_fx, fixtures):
+    """A ZIP with its central directory cut off still opens in Windows and 7-Zip; the
+    members are recovered from their local headers instead of giving up."""
+    data = arch_fx.zip_plain({"readme.txt": b"hello " * 50,
+                              "Invoice.pdf.lnk": lnk_fx.encoded_powershell()})
+    cut = data.rfind(b"PK\x01\x02")
+    while (prev := data.rfind(b"PK\x01\x02", 0, cut)) != -1:
+        cut = prev
+    report = triage(make_file("damaged.zip", data[:cut]))
+    r = report.result("archive")
+    assert r.status == "partial"
+    assert r.data["recovered_from_local_headers"]
+    assert "archive.damaged_directory" in {f.id for f in r.findings}
+    names = {c["member"]["name"]: c["report"] for c in report.children}
+    assert names["Invoice.pdf.lnk"].verdict["value"] == "malicious"
+    assert report.verdict["value"] == "malicious"
+
+
+def test_damaged_zip_with_truncated_member_is_listed(make_file, arch_fx):
+    data = arch_fx.zip_plain({"big.txt": bytes(range(256)) * 400})
+    cut = data.find(b"PK\x01\x02")
+    report = triage(make_file("cut.zip", data[: cut // 2]))
+    members = report.result("archive").data["members"]
+    assert members and "truncated" in members[0]["skipped"]
