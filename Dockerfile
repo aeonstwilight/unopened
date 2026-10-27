@@ -21,7 +21,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
-COPY pyproject.toml README.md LICENSE* ./
+COPY pyproject.toml README.md LICENSE* NOTICE.md ./
 COPY src ./src
 # oscrypto 1.3.0 on PyPI cannot parse OpenSSL 3.0.10+ version strings, so Authenticode
 # checks fail without the upstream fix; both report version 1.3.0 (see README, Install).

@@ -1,5 +1,9 @@
 # unopened
 
+[![CI](https://github.com/aeonstwilight/unopened/actions/workflows/ci.yml/badge.svg)](https://github.com/aeonstwilight/unopened/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+
 Static triage of a suspicious file, for SOC analysts who are not reverse engineers.
 
 A user reports an attachment, or the whole email. Before anyone opens it, the analyst
@@ -81,8 +85,18 @@ unopened triage reported.eml --format html --out reports/   # a page to open in 
 unopened triage inbox-export/ --out reports/                # every file, plus summary.md
 ```
 
-For capa and YARA, point the tool at your own rules (see [Rules](#rules)). Run it on
-real malware only inside an isolated analysis VM.
+For capa and YARA, point the tool at your own rules (see [Rules](#rules)). Or run the
+Docker image with no network at all:
+
+```sh
+docker build -t unopened .
+docker run --rm --network none -v "$PWD:/work" unopened triage /work/suspicious.bin
+```
+
+> **Handle real malware only inside an isolated analysis VM** (for example REMnux or
+> FLARE-VM) with no shared folders or clipboard. unopened never runs the file, but your
+> file manager, preview pane or antivirus might. Keep samples zipped with the password
+> `infected` until analysis; unopened reads the zip directly.
 
 ## How this was built
 
@@ -499,4 +513,14 @@ shared folders or clipboard. Keep samples zipped with the password `infected`.
 
 MIT, see [LICENSE](LICENSE). Optional analyzers (capa, FLOSS, YARA, oletools and the
 others under `[project.optional-dependencies]`) are installed separately and keep their
-own licenses; none of their code or rules is included in this repository.
+own licenses; none of their code or rules is included in this repository. The
+top-level-domain list is derived from the Public Suffix List (MPL-2.0); see
+[NOTICE.md](NOTICE.md) for that and the licenses of the libraries in the Docker image.
+
+## Security and contributing
+
+Found a way to make unopened run, open or leak part of a sample, reach the network, or
+escape its extraction limits? Please report it privately; see [SECURITY.md](SECURITY.md).
+Bugs, missed detections and false positives are welcome as issues, with one rule:
+**never attach a sample**. Give its SHA256, or a small synthetic file that reproduces
+the problem.
