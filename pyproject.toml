@@ -8,8 +8,25 @@ version = "0.1.0"
 description = "Static malware triage for SOC analysts. Never executes the sample."
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE.md"]
 requires-python = ">=3.11"
+authors = [{ name = "aeonstwilight" }]
+keywords = [
+    "malware-analysis", "triage", "soc", "dfir", "incident-response", "phishing",
+    "static-analysis", "yara", "capa", "threat-hunting",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
 dependencies = [
     "pefile>=2023.2.7",
     "signify>=0.7",
@@ -30,6 +47,12 @@ all = [
     "pypdf>=6.0", "flare-floss>=3.1",
 ]
 dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.urls]
+Homepage = "https://github.com/aeonstwilight/unopened"
+Documentation = "https://github.com/aeonstwilight/unopened#readme"
+Issues = "https://github.com/aeonstwilight/unopened/issues"
+Changelog = "https://github.com/aeonstwilight/unopened/blob/main/CHANGELOG.md"
 
 [project.scripts]
 unopened = "unopened.cli:main"
