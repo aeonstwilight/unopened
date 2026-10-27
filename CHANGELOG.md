@@ -3,6 +3,35 @@
 Milestones are defined in `CLAUDE.md`. Each was planned, approved and merged as its own
 pull request.
 
+## 1.0.0
+
+First public release: M1 to M11, plus release housekeeping (security policy, issue
+templates, third-party notices, package metadata).
+
+## M11: web and document delivery formats
+
+- **HTML and SVG** identified from content and tokenized as text (never rendered).
+  HTML smuggling: base64, hex and number-array blobs in scripts (after joining split
+  strings) and `data:` URIs are decoded as text, kept when they are a recognizable file,
+  extracted within the limits and triaged recursively; a page that also assembles a
+  Blob and hands it over as a download is **malicious** (V-MAL-11). Redirect wrappers,
+  SVG images that navigate or carry script, password forms that submit to a server, and
+  password pages posting to Telegram/Discord/Slack (V-MAL-13).
+- **HTA and WSF**: script blocks go through the script analyzer (deobfuscation and
+  keywords), so a downloader HTA is caught like a `.vbs`. HTML under an `.hta` name is an
+  HTA, and HTA/WSF count as runnable for disguised-name and container checks.
+- **RTF** (oletools rtfobj): packaged files and embedded documents extracted and triaged;
+  Equation Editor objects, with the CVE-2017-11882 / CVE-2018-0802 font-name overflow or
+  `\objupdate` judged **malicious** (V-MAL-12); link objects, remote templates (V-MAL-05)
+  and non-standard headers.
+- **VHD/VHDX** identified and reported as **could not analyze** (V-CNA-05): the files
+  inside are not extracted yet.
+- The script analyzer's core is reusable (`analyze_text`), and the email analyzer's HTML
+  attachments are now triaged as web pages.
+- Synthetic fixtures in `tests/fixtures/web.py`, including benign controls (newsletter,
+  CSV-export page, SVG logo, plain RTF, plain HTA) and fuzz seeds for every new format.
+  Not yet measured on real samples or the benign corpora (see docs/validation.md).
+
 ## M10: presentation
 
 - Example reports in `examples/` (phishing email as Markdown and HTML, shortcut lure,

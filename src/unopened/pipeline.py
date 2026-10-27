@@ -60,14 +60,15 @@ PLANNED_BY_KIND: dict[str, list[tuple[str, str]]] = {
     "unknown": [("Type-specific analysis", "file type not recognized; only hashes, strings "
                  "and YARA were checked")],
 }
-EXTRACTING_KINDS = {"zip", "7z", "iso", "pdf", "email", "ole:outlook"}
+EXTRACTING_KINDS = {"zip", "7z", "iso", "pdf", "email", "ole:outlook", "html", "svg", "wsf",
+                    "rtf"}
 # M5 holdout: two MSI installers came back "no findings" without the report saying their
 # contents were never examined.
 MSI_NOT_CHECKED = "Windows Installer (MSI) contents"
 MSI_REASON = ("custom actions, embedded scripts and packaged files are not analyzed in "
               "version 1; only hashes, strings and YARA were checked")
-MEMBER_SOURCES = ("archive", "pdf", "email")
-RUNNABLE_MEMBER_KINDS = {"pe", "mz", "lnk", "script"}
+MEMBER_SOURCES = ("archive", "pdf", "email", "web", "rtf")
+RUNNABLE_MEMBER_KINDS = {"pe", "mz", "lnk", "script", "wsf", "html:hta"}
 
 
 class _Session:
@@ -289,7 +290,8 @@ def container_findings(children: list[dict[str, Any]]) -> list[Finding]:
     members have been identified."""
     findings: list[Finding] = []
     kinds = {id(c): c["report"].file_type.kind if c["report"].file_type else "" for c in children}
-    runnable = [c for c in children if kinds[id(c)] in RUNNABLE_MEMBER_KINDS]
+    runnable = [c for c in children if c["report"].file_type
+                and type_keys(c["report"].file_type) & RUNNABLE_MEMBER_KINDS]
     if runnable:
         names = ", ".join(c["member"]["name"] for c in runnable[:5])
         findings.append(Finding(

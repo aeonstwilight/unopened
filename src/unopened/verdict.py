@@ -29,6 +29,7 @@ CONFIDENCE_ORDER = ["low", "medium", "high"]
 TYPE_ANALYZER = {
     "pe": "pe", "ole": "office", "ooxml": "office", "lnk": "lnk", "script": "script",
     "pdf": "pdf", "zip": "archive", "7z": "archive", "iso": "archive", "email": "email",
+    "html": "web", "svg": "web", "wsf": "web", "rtf": "rtf", "vhd": "vhd",
 }
 # Optional rule-based analyzers; when they did not run, "no findings" confidence drops.
 RULE_ANALYZERS = {"yara"}
@@ -181,13 +182,28 @@ def _three_medium(f: Facts) -> Evidence | None:
 
 
 def _obfuscated_runner(f: Facts) -> Evidence | None:
-    obfuscated = f.with_id("script.obfuscated")
-    r = f.report.result("script")
-    if not obfuscated or r is None:
-        return None
-    runs = [k for k in r.data.get("keywords", []) if "execute" in k.get("tags", [])]
-    if runs:
-        return [x.title for x in obfuscated] + [k["title"] for k in runs]
+    for analyzer in ("script", "web"):
+        obfuscated = f.with_id(f"{analyzer}.obfuscated")
+        r = f.report.result(analyzer)
+        if not obfuscated or r is None:
+            continue
+        runs = [k for k in r.data.get("keywords", []) if "execute" in k.get("tags", [])]
+        if runs:
+            return [x.title for x in obfuscated] + [k["title"] for k in runs]
+    return None
+
+
+def _equation_exploit(f: Facts) -> Evidence | None:
+    exploit = f.with_id("rtf.equation_exploit")
+    if exploit:
+        return _titles(exploit)
+    return _all(f.with_id("rtf.equation_object"), f.with_id("rtf.objupdate"))
+
+
+def _virtual_disk(f: Facts) -> Evidence | None:
+    ft = f.report.file_type
+    if ft and ft.kind == "vhd":
+        return [f"{ft.description}: the files inside were not extracted"]
     return None
 
 
@@ -237,29 +253,46 @@ RULES: list[Rule] = [
          "A document contains a DDE field that can run a command.",
          lambda f: _titles(f.with_id("office.dde"))),
     Rule("V-MAL-05", MALICIOUS, "high",
-         "A document loads a remote template or object when opened (template injection).",
-         lambda f: _titles(f.with_id("office.remote_load"))),
+         "A document (Office or RTF) loads a remote template or object when opened "
+         "(template injection).",
+         lambda f: _titles(f.with_id("office.remote_load", "rtf.remote_template"))),
     Rule("V-MAL-06", MALICIOUS, "high",
-         "A document or PDF embeds, or an email attaches, a file with an executable "
-         "extension.",
+         "A document, RTF or PDF embeds, an email attaches, or a web page carries encoded, a "
+         "file with an executable extension or content.",
          lambda f: _titles(f.with_id("office.embedded_executable", "pdf.embedded_executable",
-                                     "email.attachment_executable"))),
+                                     "email.attachment_executable", "rtf.embedded_executable",
+                                     "web.embedded_executable"))),
     Rule("V-MAL-07", MALICIOUS, "high",
-         "A script (or PDF JavaScript) both downloads content and runs code, after "
-         "deobfuscation.", lambda f: _titles(f.with_id("script.download_execute",
-                                                         "pdf.download_execute"))),
+         "A script (or PDF JavaScript, or a page's HTA/WSF script) both downloads content and "
+         "runs code, after deobfuscation.",
+         lambda f: _titles(f.with_id("script.download_execute", "pdf.download_execute",
+                                     "web.download_execute"))),
     Rule("V-MAL-08", MALICIOUS, "high",
          "A PDF contains a Launch action that can start a program.",
          lambda f: _titles(f.with_id("pdf.launch"))),
+    Rule("V-MAL-11", MALICIOUS, "high",
+         "HTML smuggling: an HTML or SVG file decodes an embedded file, assembles it in the "
+         "browser and hands it over as a download.",
+         lambda f: _titles(f.with_id("web.smuggling"))),
+    Rule("V-MAL-12", MALICIOUS, "high",
+         "An RTF carries an Equation Editor object shaped like CVE-2017-11882 / "
+         "CVE-2018-0802 (oversized font name), or one set to load automatically on open.",
+         _equation_exploit),
+    Rule("V-MAL-13", MALICIOUS, "high",
+         "A page with a password field sends what is typed to a messaging service "
+         "(Telegram bot, Discord or Slack webhook), as phishing kits do.",
+         lambda f: _titles(f.with_id("web.credential_exfil"))),
     Rule("V-MAL-09", MALICIOUS, "medium",
-         "A member of this archive, disk image, PDF or email was judged malicious.",
+         "A member of this container (archive, disk image, PDF, email, web page or RTF) was "
+         "judged malicious.",
          _children(MALICIOUS)),
     Rule("V-MAL-10", MALICIOUS, "medium",
          "Two or more HIGH findings from different analyzers.", _two_high),
     Rule("V-SUS-01", SUSPICIOUS, "medium",
          "At least one HIGH finding.", lambda f: _titles(f.at(Severity.HIGH))),
     Rule("V-SUS-02", SUSPICIOUS, "medium",
-         "A member of this archive, disk image, PDF or email was judged suspicious.",
+         "A member of this container (archive, disk image, PDF, email, web page or RTF) was "
+         "judged suspicious.",
          _children(SUSPICIOUS)),
     Rule("V-REP-03", SUSPICIOUS, "low",
          f"VirusTotal reports between 1 and {VT_MALICIOUS_THRESHOLD - 1} engines detecting this "
@@ -278,8 +311,13 @@ RULES: list[Rule] = [
          "None of the archive's members could be extracted (limits, encryption or damage).",
          _nothing_extracted),
     Rule("V-CNA-04", COULD_NOT, "medium",
-         "A member of this archive, disk image, PDF or email could not be analyzed.",
+         "A member of this container (archive, disk image, PDF, email, web page or RTF) "
+         "could not be analyzed.",
          _children(COULD_NOT)),
+    Rule("V-CNA-05", COULD_NOT, "high",
+         "A virtual hard disk (VHD/VHDX): the files inside are not extracted in this "
+         "version. Mount it read-only in an analysis VM and triage its files.",
+         _virtual_disk),
     Rule("V-NF-01", NO_FINDINGS, "medium",
          "No rule above matched: nothing at MEDIUM or above, or not enough to call it "
          "suspicious. This is not a statement that the file is safe.",
@@ -386,8 +424,9 @@ def render_markdown() -> str:
         "verdict.",
         "- **Malicious** and **suspicious** keep their confidence when other checks are "
         "incomplete (the evidence found still stands) but the report notes the gaps.",
-        "- Archives, disk images, PDFs and emails take the most severe verdict among their own "
-        "findings and their members (V-MAL-09, V-SUS-02, V-CNA-04).",
+        "- Archives, disk images, PDFs, emails, web pages and RTF documents take the most "
+        "severe verdict among their own findings and their members (V-MAL-09, V-SUS-02, "
+        "V-CNA-04).",
         "",
         "Finding IDs used by these rules (for example `office.autoexec`) are stable and "
         "appear in the JSON report next to every finding.",

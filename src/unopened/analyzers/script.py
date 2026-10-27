@@ -112,15 +112,22 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
     language = ctx.file_type.subtype or "unknown"
     with ctx.path.open("rb") as f:
         raw = f.read(MAX_TEXT + 1)
+    truncated = len(raw) > MAX_TEXT
+    out, _ = analyze_text(read_text(raw[:MAX_TEXT]), language)
+    if truncated:
+        out.not_checked.insert(0, f"Script text beyond the first {MAX_TEXT:,} bytes")
+    return out
+
+
+def analyze_text(text: str, language: str, prefix: str = "script",
+                 where: str = "the script") -> tuple[AnalyzerOutput, str]:
+    """Deobfuscate and scan one script's text; returns the output and the full
+    deobfuscated text. Also used for the script blocks of HTML, HTA and WSF files, with
+    their own finding prefix."""
     out = AnalyzerOutput()
-    if len(raw) > MAX_TEXT:
-        out.not_checked.append(f"Script text beyond the first {MAX_TEXT:,} bytes")
-        raw = raw[:MAX_TEXT]
-    text = read_text(raw)
     result = deobfuscate(text, language=language)
     if result.truncated:
         out.not_checked.append("Deobfuscated output beyond the size cap")
-
     techniques = result.techniques()
     longest = max((len(line) for line in text.splitlines()), default=0)
     out.data = {
@@ -136,7 +143,7 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
 
     hits = scan_keywords(language, [text, result.text] if result.changed else [text])
     out.data["keywords"] = hits
-    out.findings += keyword_findings("script", hits, "the script")
+    out.findings += keyword_findings(prefix, hits, where)
 
     # Shape, not count: obfuscation chains char codes and literals together (Chr(104) &
     # Chr(116) & Chr(116) & Chr(112) spells "http"); ordinary code uses them one at a time
@@ -158,23 +165,23 @@ def analyze_script(ctx: Context) -> AnalyzerOutput:
     if encoded or heavy_concat:
         what = sorted(encoded) + (["heavy string concatenation"] if heavy_concat else [])
         out.findings.append(Finding(
-            "script.obfuscated", Severity.MEDIUM, "Script is obfuscated",
+            f"{prefix}.obfuscated", Severity.MEDIUM, "Script is obfuscated",
             f"Uses {', '.join(what)} to hide its text. The decoded form is shown in the "
-            "Script section and was searched for keywords and indicators.",
+            "report and was searched for keywords and indicators.",
         ))
     if longest > EXTREME_LINE:
         out.findings.append(Finding(
-            "script.long_line", Severity.MEDIUM,
+            f"{prefix}.long_line", Severity.MEDIUM,
             f"Extremely long line ({longest:,} characters)",
             f"No ordinary script, even a minified one, has a line over {EXTREME_LINE:,} "
             "characters. Lines like this hold an encoded payload or packed code.",
         ))
     elif longest > LONG_LINE:
         out.findings.append(Finding(
-            "script.long_line", Severity.LOW, f"Very long line ({longest:,} characters)",
+            f"{prefix}.long_line", Severity.LOW, f"Very long line ({longest:,} characters)",
             "Long single lines usually hold encoded data or packed code.",
         ))
     if result.changed:
-        out.data["indicator_texts"] = [["script", line] for line in result.text.splitlines()
+        out.data["indicator_texts"] = [[prefix, line] for line in result.text.splitlines()
                                        if line.strip()]
-    return out
+    return out, result.text

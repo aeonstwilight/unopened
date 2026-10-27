@@ -22,7 +22,8 @@ a skipped check never passes for a clean result.
 Full example reports, generated from the synthetic test fixtures by
 `scripts/make_examples.py`: [phishing email](examples/phishing-email.md) (also as
 [HTML](examples/phishing-email.html), download and open it), [shortcut lure](examples/shortcut.md),
-[macro document](examples/macro-document.md).
+[macro document](examples/macro-document.md),
+[HTML smuggling page](examples/html-smuggling.md).
 
 The top of the report for a synthetic test shortcut (built by `tests/fixtures/lnk.py`;
 its "payload" is `Write-Host fixture`), named to look like a PDF invoice:
@@ -54,8 +55,11 @@ every indicator (defanged), what was not checked, and ready-to-run hunt queries 
 Splunk, Microsoft Sentinel and Elastic. The same results are available as JSON.
 
 **Handles:** Windows programs (EXE, DLL), Office documents (legacy and OOXML, with
-macros), shortcuts (LNK), PowerShell, JavaScript, VBScript and batch scripts, PDFs, and
-ZIP, 7z and ISO containers, whose members are triaged recursively within strict limits.
+macros), RTF documents, shortcuts (LNK), PowerShell, JavaScript, VBScript and batch
+scripts, HTML and SVG files (including HTML smuggling), HTA and WSF script containers,
+PDFs, emails (`.eml`, `.msg`), and ZIP, 7z and ISO containers, whose members are triaged
+recursively within strict limits. VHD and VHDX disk images are recognized and reported
+as not analyzed.
 
 ## How well it works
 
@@ -376,24 +380,26 @@ rules, in order, are in [docs/verdict-rules.md](docs/verdict-rules.md), generate
   run or download things, a shortcut launching PowerShell or similar with an encoded or
   hidden command, DDE, remote template injection, an embedded executable or an email
   attachment with a runnable extension, a script that downloads and runs code, a PDF
-  Launch action, a malicious archive or email member, or HIGH findings from two different
-  analyzers.
+  Launch action, HTML smuggling (a page that decodes an embedded file and hands it over as
+  a download), an RTF Equation Editor exploit, a password page that posts to a Telegram or
+  Discord bot, a malicious member, or HIGH findings from two different analyzers.
 - **Suspicious**: any single HIGH finding, an obfuscated script that runs code, a
   suspicious member, or three or more MEDIUM findings.
 - **Could not analyze**: the analyzer for the file's type failed, encrypted content could
-  not be opened, or no archive member could be extracted.
+  not be opened, no archive member could be extracted, or the file is a virtual hard disk
+  (its files are not extracted in this version).
 - **No findings** only means the checks that ran found nothing decisive. It is never a
   statement that the file is safe, and drops to low confidence when any check did not
   complete (including YARA or, for PE files, capa not being configured).
 
-Archives, disk images, PDFs and emails take the most severe verdict among their own findings and
-their members.
+Archives, disk images, PDFs, emails, web pages and RTF documents take the most severe
+verdict among their own findings and their members.
 
 ## What it checks
 
 | Step | What it does |
 |---|---|
-| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), ZIP, LNK, PDF, 7z, ISO, PowerShell/JavaScript/VBScript/batch (content heuristics; when the content is inconclusive or also fits the language the name says, the name decides, since that is what Windows will run it with), text, including UTF-16 without a byte-order mark. Flags extension mismatches (HIGH when a program wears a document, image or archive extension; LOW for storage names like `.bin` or `.malware`), double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
+| Type identification | Uses magic bytes and structure, never the extension. Recognizes PE (EXE/DLL/driver, PE32/PE32+), MZ without a PE header, OLE, OOXML (Word/Excel/PowerPoint, VBA project present), RTF (any `{\rt` header, as Word accepts), ZIP, LNK, PDF, 7z, ISO, VHD/VHDX, HTML, HTA (by its `<hta:application>` tag or `.hta` name), SVG, WSF/WSC, PowerShell/JavaScript/VBScript/batch (content heuristics; when the content is inconclusive or also fits the language the name says, the name decides, since that is what Windows will run it with), text, including UTF-16 without a byte-order mark. Flags extension mismatches (HIGH when a program wears a document, image or archive extension; LOW for storage names like `.bin` or `.malware`), double extensions (`invoice.pdf.exe`), padding spaces and Unicode direction-override tricks. |
 | Hashes | MD5, SHA1, SHA256; imphash for PE; TLSH when `py-tlsh` is installed. |
 | PE | Headers, compile timestamp (zeroed, future, implausible, Delphi default), sections with entropy and permissions, packer section names, W+X sections, entry point placement, imports grouped by behavior (`data/pe_imports.toml`), exports, PDB path, overlay, truncation, .NET detection, parser anomalies. |
 | Authenticode | Signature presence and validity (offline, against the Microsoft root list bundled with signify), signer, issuer and timestamp. Revocation is not checked. |
@@ -406,11 +412,16 @@ their members.
 | Archives and disk images | ZIP (plain, ZipCrypto, AES), 7z (including encrypted headers) and ISO (Joliet, Rock Ridge, UDF, ISO 9660). A ZIP whose central directory is damaged or missing is recovered from its local file headers and reported as damaged, since Windows and 7-Zip open such files anyway. Tries no password, then `infected`, then any `--archive-password`. Each member is triaged recursively with the full pipeline. Flags path-traversal and deceptive names, hidden files in images, shortcuts next to hidden files, programs inside archives, unknown passwords, decompression bombs and limits reached. |
 | Scripts | PowerShell, JavaScript/JScript, VBScript and batch. Deobfuscation by text transformation only (base64 including `-EncodedCommand`, character codes, string concatenation), repeated up to five rounds. Batch variable references (`%v%`, `%v:~n,m%`) are expanded the way cmd.exe would, as text. Keywords per language from `data/script_keywords.toml` (editable), plus a combined "downloads and runs code" finding. Obfuscation is judged by shape (chained char codes, joined literals, variable substrings), not by counting single calls. Decoded text feeds the indicator list. |
 | Email (.eml, Outlook .msg) | Headers (From, Reply-To, Return-Path, Received chain, Message-ID); SPF, DKIM and DMARC from the topmost `Authentication-Results` header only, since the receiving server adds it and lower ones can be forged by the sender; a display name showing another address or a brand the address does not belong to; Reply-To and Return-Path in a different organization; sender and link domains imitating a brand in `data/brands.toml` (editable; look-alike swaps such as `0`/`o` and `rn`/`m` undone first) or using punycode; links whose visible text names a different site, links to raw IPs or `javascript:`/`data:` URLs, forms (with or without a password field), meta refreshes and frames in the HTML body; attachments with runnable or HTML extensions. HTML is tokenized for tags, never rendered, and no link is followed. Attachments, including attached messages, are extracted within the limits and triaged recursively. For `.msg` files, the saved transport headers are read when present (otherwise the sender comes from MAPI properties and authentication is listed as not checked). |
+| HTML, SVG, HTA, WSF | Tokenized with the standard library's HTML parser; nothing is rendered, run or fetched. **HTML smuggling**: base64, hex and number-array blobs (in scripts, after joining split strings, and in `data:` URIs) are decoded as text and kept when the bytes are a recognizable file (program, archive, document, disk image, shortcut, or another page); together with a page that assembles a file (`Blob`) and hands it to the browser as a download (`createObjectURL`, `msSaveOrOpenBlob`, a `download` attribute) this is HTML smuggling. Decoded files are extracted within the limits and triaged recursively. Also: meta refreshes, script navigation and remote frames (a page that shows almost nothing and sends the viewer elsewhere is flagged HIGH; an SVG that navigates at all is), scripts and event handlers in SVG images, password forms that submit to a web server, and password pages that post to Telegram bots or Discord/Slack webhooks. Script blocks (JavaScript, VBScript, by `language`/`type`) go through the script deobfuscation and keywords above, so an HTA or WSF that downloads and runs code is caught like a `.vbs` or `.js` would be. |
+| RTF | Embedded objects decoded with oletools' rtfobj, which reproduces Word's own parsing quirks that exploit documents rely on. Packaged files and embedded documents are extracted within the limits and triaged recursively. Equation Editor objects are flagged, and a font name longer than the editor's fixed buffer (the CVE-2017-11882 / CVE-2018-0802 overflow) or an auto-updating (`\objupdate`) equation object is malicious. Also: link objects (CVE-2017-0199 style), remote templates (`{\*\template https://...}`), and headers other than `{\rtf1`. |
+| VHD, VHDX | The footer or header is read (format, disk type, creator, size, partition types). The files inside are **not** extracted in this version, so the verdict is *could not analyze*: mount the image read-only in the analysis VM and triage its files. Strings and YARA still scan the raw disk bytes. |
 | PDF | Raw keyword counts with `#xx`-escaped names decoded (and flagged), then JavaScript source with its trigger (OpenAction, /AA), Launch actions, URIs, XFA and rich media. Attachments are extracted within the limits and triaged recursively. |
 
 Not in this version (always listed under **Not checked** in the report):
-extraction of files embedded in Office documents; DDE in legacy binary Word files; VHD
-and other disk-image formats; Outlook messages embedded inside a `.msg` (listed, not
+extraction of files embedded in Office documents; DDE in legacy binary Word files; files
+inside VHD/VHDX images (the image is identified and the verdict says it was not
+analyzed); encrypted or XOR-encoded smuggling payloads (the smuggling is detected, the
+payload is not decoded); OneNote, CHM and MSI contents; Outlook messages embedded inside a `.msg` (listed, not
 extracted); TNEF (`winmail.dat`) contents; S/MIME-encrypted bodies.
 
 ### How the heavier libraries stay static
@@ -429,6 +440,10 @@ extracted); TNEF (`winmail.dat`) contents; S/MIME-encrypted bodies.
 - **pypdf** parses and decompresses PDF objects with lowered decompression limits. Its
   optional external `jbig2dec` decoder is disabled, so no program ever runs on sample
   data. JavaScript is only read.
+- **HTML and SVG** are tokenized with Python's `html.parser`: tags and attributes are
+  read as text, nothing is laid out or rendered, no script runs and no URL is fetched.
+- **RTF** objects are decoded by oletools' rtfobj, which parses the RTF text and the
+  hex object data; no object is activated.
 - **Scripts** are never evaluated: deobfuscation rewrites recognizable encodings into
   string literals and stops after a fixed number of rounds and output size.
 - Every analyzer runs in its own worker process with a time limit.

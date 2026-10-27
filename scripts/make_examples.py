@@ -4,7 +4,8 @@
 
 Only reports are written; the inputs are built in a temporary folder and deleted. They are
 the same harmless fixtures the tests use (reserved domains, a shortcut whose "payload" is
-Write-Host fixture, a macro that shows a MsgBox).
+Write-Host fixture, a macro that shows a MsgBox, a page that smuggles a program whose
+only instruction is `ret`).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 
-from fixtures import lnk, mail, office  # noqa: E402
+from fixtures import lnk, mail, office, web  # noqa: E402
 
 from unopened import pipeline  # noqa: E402
 from unopened.analyzers import Options  # noqa: E402
@@ -26,6 +27,7 @@ EXAMPLES = [
     ("phishing-email", "Action required.eml", mail.phish_eml, ("md", "html")),
     ("shortcut", "Invoice.pdf.lnk", lnk.encoded_powershell, ("md",)),
     ("macro-document", "Q3 report.doc", office.legacy_doc, ("md",)),
+    ("html-smuggling", "Invoice.html", web.smuggling_html_exe, ("md",)),
 ]
 
 

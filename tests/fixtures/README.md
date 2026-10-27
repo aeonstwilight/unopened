@@ -8,6 +8,10 @@ time, so no binaries are committed:
   section, high-entropy data, a future timestamp) are just table entries and random bytes.
 - Network values use documentation-only names and ranges: `example.com/.org/.net`
   (RFC 2606) and `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24` (RFC 5737).
+- `web.py` (HTML, SVG, HTA, WSF, RTF, VHD): smuggled "payloads" are the `ret`-only PE
+  above or small archives of text; the Equation Editor "exploit" is a font name of
+  repeated `A`s with no code. The credential-exfiltration page names a Telegram bot API
+  host because that is what the detection looks for; nothing contacts it.
 - The EICAR test string is the only "detected" content allowed, for later YARA and
   reputation tests.
 

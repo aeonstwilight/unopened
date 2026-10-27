@@ -90,3 +90,10 @@ def mail_fx():
     from fixtures import mail
 
     return mail
+
+
+@pytest.fixture
+def web_fx():
+    from fixtures import web
+
+    return web

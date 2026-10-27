@@ -91,14 +91,17 @@ def registry() -> list[Analyzer]:
         authenticode,
         basic,
         capa_analyzer,
+        disk,
         floss_analyzer,
         lnk,
         mail,
         office,
         pdf,
         pe,
+        rtf,
         script,
         strings,
+        web,
         yara_scan,
     )
 
@@ -159,6 +162,19 @@ def registry() -> list[Analyzer]:
             "pdf", "PDF JavaScript, actions and embedded files", pdf.analyze_pdf,
             kinds=frozenset({"pdf"}), requires=("pypdf",),
             install_hint="pip install 'unopened[pdf]'",
+        ),
+        Analyzer(
+            "web", "HTML, SVG, HTA and WSF: smuggled payloads, redirects, forms and scripts",
+            web.analyze_web, kinds=frozenset({"html", "svg", "wsf"}),
+        ),
+        Analyzer(
+            "rtf", "RTF embedded objects, Equation Editor exploit and remote content",
+            rtf.analyze_rtf, kinds=frozenset({"rtf"}), requires=("oletools", "olefile"),
+            install_hint="pip install 'unopened[office]'",
+        ),
+        Analyzer(
+            "vhd", "Virtual hard disk (VHD/VHDX) header", disk.analyze_vhd,
+            kinds=frozenset({"vhd"}),
         ),
         Analyzer(
             "yara", "YARA rule scan", yara_scan.analyze_yara,

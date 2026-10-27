@@ -407,6 +407,11 @@ take a second or two.
 - **FLOSS.** Added in M6 for PE files. Its strings feed the indicator list but not the
   verdict. A rerun of both benign corpora with FLOSS installed is needed before its
   indicators are allowed to contribute to findings.
+- **M11 formats.** HTML, SVG, HTA, WSF and RTF analysis and the VHD verdict were built
+  and tested on synthetic fixtures only. Both benign corpora need saved web pages, SVG
+  images and RTF documents added and a rerun, and the next holdout set should include
+  HTML smuggling, SVG phishing and RTF exploit samples, before these rules are counted
+  in the detection and false-positive tables above.
 - **Known limitations, documented rather than fixed:** link-only PDF lures and lure
   documents with only hyperlinks, MSI contents, macro workbooks without auto-run that use
   suspicious functions, VBScript loaders that hide code behind Execute, and large scripts
