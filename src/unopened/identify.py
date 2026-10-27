@@ -20,6 +20,8 @@ HEAD_SIZE = 0x9010  # enough to reach the ISO 9660 volume descriptors at 0x8001/
 OLE_MAGIC = bytes.fromhex("D0CF11E0A1B11AE1")
 LNK_MAGIC = bytes.fromhex("4C000000") + bytes.fromhex("0114020000000000C000000000000046")
 SEVENZIP_MAGIC = b"7z\xbc\xaf\x27\x1c"
+VHD_MAGIC = b"conectix"  # VHD footer cookie (last 512 bytes; dynamic disks also copy it first)
+VHDX_MAGIC = b"vhdxfile"
 
 IMAGE_FILE_DLL = 0x2000
 SUBSYSTEMS = {1: "native", 2: "GUI", 3: "console", 9: "Windows CE", 10: "EFI application"}
@@ -53,6 +55,13 @@ EXPECTED_EXTENSIONS: dict[str, set[str]] = {
     "script:javascript": {"js", "jse", "mjs", "cjs"},
     "script:vbscript": {"vbs", "vbe", "vba"},
     "script:batch": {"bat", "cmd"},
+    "html:html": {"html", "htm", "xhtml", "shtml", "shtm", "xht", "mht", "mhtml"},
+    "html:hta": {"hta"},
+    "svg": {"svg"},
+    "wsf": {"wsf", "wsc", "sct"},
+    # Word opens RTF under a .doc name without complaint; delivery uses that a lot.
+    "rtf": {"rtf", "doc", "wri"},
+    "vhd": {"vhd", "vhdx", "avhd", "avhdx"},
 }
 
 # Extensions a user would think of as "just a document/picture" and open without suspicion.
@@ -65,7 +74,7 @@ RUNNABLE = {
     "exe", "scr", "com", "pif", "cpl", "msi", "bat", "cmd", "js", "jse", "vbs", "vbe", "wsf",
     "wsh", "hta", "ps1", "lnk", "jar", "reg", "dll",
 }
-RUNNABLE_KINDS = {"pe", "mz", "lnk", "script"}
+RUNNABLE_KINDS = {"pe", "mz", "lnk", "script", "wsf"}
 # Extensions that claim a harmless, openable type. A program wearing one of these is
 # disguised. Anything else (".bin", ".vir", ".malware", ".dat") is how samples are stored
 # or transferred, which is worth noting but is not deception.
@@ -85,6 +94,11 @@ def identify(path: Path, name: str | None = None) -> FileType:
     file_type = _identify_content(path, head)
     if file_type.kind == "text":
         file_type = _script_by_name(name or path.name) or file_type
+    elif file_type.kind == "html" and file_type.subtype == "html" and (
+            name or path.name).lower().rstrip(". ").endswith(".hta"):
+        # mshta runs any HTML under an .hta name with full user rights; the name decides.
+        file_type = FileType("html", HTA_DESCRIPTION + " (identified by its .hta name)",
+                             subtype="hta", details={"identified_by": "extension"})
     elif file_type.kind == "script":
         file_type = _script_language_by_name(name or path.name, file_type)
     file_type.mismatches = check_name(name or path.name, file_type)
@@ -152,6 +166,14 @@ def _identify_content(path: Path, head: bytes) -> FileType:
     for offset in (0x8001, 0x8801, 0x9001):
         if head[offset : offset + 5] == b"CD001":
             return FileType("iso", "ISO 9660 disk image")
+    if head.startswith(b"{\\rt"):
+        # Word accepts any header starting {\rt, so {\rtf1 is not required (and exploit
+        # documents often drop it to dodge scanners).
+        return FileType("rtf", "Rich Text Format document (RTF)")
+    if head.startswith(VHDX_MAGIC):
+        return FileType("vhd", "Virtual hard disk (VHDX)", subtype="vhdx")
+    if head.startswith(VHD_MAGIC) or _vhd_footer(path):
+        return FileType("vhd", "Virtual hard disk (VHD)", subtype="vhd")
     if looks_like_email(head):
         return FileType("email", "Email message (.eml, RFC 5322)", subtype="eml")
     text = _decode_text(head)
@@ -340,6 +362,18 @@ def utf16_without_bom(sample: bytes) -> str | None:
     return None
 
 
+def _vhd_footer(path: Path) -> bool:
+    try:
+        size = path.stat().st_size
+        if size < 512:
+            return False
+        with path.open("rb") as f:
+            f.seek(size - 512)
+            return f.read(8) == VHD_MAGIC
+    except OSError:
+        return False
+
+
 def _decode_text(head: bytes) -> str | None:
     sample = head[:8192]
     if sample.startswith((b"\xff\xfe", b"\xfe\xff")):
@@ -401,7 +435,36 @@ SCRIPT_NAMES = {
 JSON_START = re.compile(r'^\s*(?:\{\s*"|\[\s*[{\["\d\-]|\[\s*\])')
 
 
+HTA_DESCRIPTION = "HTML Application (HTA, run by mshta.exe outside the browser)"
+# Markup is recognized from what it starts with, after an XML declaration, comments and a
+# doctype: a script that only mentions <html> in a string does not start with a tag.
+MARKUP_PREAMBLE = re.compile(
+    r"^(?:\s+|<\?xml[^>]*\?>|<!--.*?-->|<!doctype\s+(?!html)[^>]*>)*", re.I | re.S)
+WSH_START = re.compile(r"<(?:job|package|scriptlet|component)\b", re.I)
+HTML_START = re.compile(
+    r"<(?:!doctype\s+html|html|head|body|script|meta|title|style|link|div|iframe|form|"
+    r"center|table|p|a|img|span|h[1-6]|noscript|base|frameset|hta:application)[\s>/]", re.I)
+HTA_TAG = re.compile(r"<hta:application\b", re.I)
+
+
+def _identify_markup(text: str) -> FileType | None:
+    rest = text[MARKUP_PREAMBLE.match(text).end():]
+    if not rest.startswith("<"):
+        return None
+    if re.match(r"<svg[\s>]", rest, re.I):
+        return FileType("svg", "SVG image (XML; can carry scripts and links)")
+    if WSH_START.match(rest) and re.search(r"<script\b", text, re.I):
+        return FileType("wsf", "Windows Script File (WSF/WSC, run by Windows Script Host)")
+    if HTML_START.match(rest):
+        if HTA_TAG.search(text):
+            return FileType("html", HTA_DESCRIPTION, subtype="hta")
+        return FileType("html", "HTML document", subtype="html")
+    return None
+
+
 def _identify_text(text: str) -> FileType:
+    if markup := _identify_markup(text):
+        return markup
     # JSON data names cmdlets and APIs as strings and scored as PowerShell. M5 corpus 2: a
     # PSScriptAnalyzer settings file listing Invoke-WebRequest, Invoke-Expression and
     # Start-Process was judged a malicious script. No script language starts like this.
@@ -423,7 +486,7 @@ def _identify_text(text: str) -> FileType:
 
 
 def _extension_key(file_type: FileType) -> str:
-    if file_type.kind in ("ooxml", "script", "email") or (
+    if file_type.kind in ("ooxml", "script", "email", "html") or (
             file_type.kind == "ole" and file_type.subtype):
         return f"{file_type.kind}:{file_type.subtype}"
     return file_type.kind

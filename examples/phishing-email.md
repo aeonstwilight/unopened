@@ -7,9 +7,9 @@
 | Verdict | **MALICIOUS** (high confidence, rule V-MAL-06) |
 | File type | Email message (.eml, RFC 5322) |
 | Size | 2,939 bytes |
-| SHA256 | `3e8247aac41f0b71f906ef15994a7fbf41a25f8fc7e9ba012747ee330c235904` |
+| SHA256 | `820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374` |
 | Checks incomplete | 1 (see warnings below) |
-| Generated | 2026-10-24T22:23:48+00:00 by unopened 0.1.0 |
+| Generated | 2026-10-27T20:09:29+00:00 by unopened 1.0.0 |
 
 ## Warning: some checks did not complete
 
@@ -21,9 +21,9 @@ A check that did not complete is not a clean result.
 
 **MALICIOUS**, high confidence.
 
-- **V-MAL-06** (malicious): A document or PDF embeds, or an email attaches, a file with an executable extension.
+- **V-MAL-06** (malicious): A document, RTF or PDF embeds, an email attaches, or a web page carries encoded, a file with an executable extension or content.
   - Attachment with a runnable extension: Invoice.pdf.lnk
-- **V-MAL-09** (malicious): A member of this archive, disk image, PDF or email was judged malicious.
+- **V-MAL-09** (malicious): A member of this container (archive, disk image, PDF, email, web page or RTF) was judged malicious.
   - Invoice.pdf.lnk: malicious (high)
 - **V-MAL-10** (malicious): Two or more HIGH findings from different analyzers.
   - DMARC failed for the sender's domain
@@ -83,10 +83,10 @@ _Produced by fixed, documented rules (verdict-rules in the project's docs folder
 
 | Hash | Value |
 |---|---|
-| MD5 | `7297bc3f10a71a0c4a6645a30643f6ba` |
-| SHA1 | `a1d0c98b688e65e4b1abe6af08f3270fe17eccc0` |
-| SHA256 | `3e8247aac41f0b71f906ef15994a7fbf41a25f8fc7e9ba012747ee330c235904` |
-| TLSH | `T12F51B4B28E013989932EBD48515035282D3056A719C7F9A4EED846F91CCCB8EF7F26C8` |
+| MD5 | `0ab793a1fd8e2d4b5bf30806f9abb880` |
+| SHA1 | `f57c165d1ef28395e2ff9cf526547b5236ddaa4c` |
+| SHA256 | `820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374` |
+| TLSH | `T13651B6719C0035C18329BC68916576282C3047971AD7E868AED84BFA1CDCF4AF6F12C1` |
 
 ## Email
 
@@ -150,7 +150,7 @@ Not fully checked: yara UNAVAILABLE
 |  |  |
 |---|---|
 | Verdict | **NO FINDINGS** (low, V-NF-01) |
-| Type | Plain text (no supported script language recognized) |
+| Type | HTML document |
 | Size | 41 bytes |
 | SHA256 | `504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84` |
 
@@ -234,14 +234,14 @@ Searches for this file's hashes, names and network indicators over the last 30 d
 **Hashes in any indexed data (raw terms)**
 
 ~~~
-index=* earliest=-30d ("3e8247aac41f0b71f906ef15994a7fbf41a25f8fc7e9ba012747ee330c235904" OR "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" OR "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84" OR "a1d0c98b688e65e4b1abe6af08f3270fe17eccc0" OR "d219c60a1034d83a547efdb38e53c900015d5c8f" OR "643ce69f2f058f7893be0d54a494fc8876b340da" OR "7297bc3f10a71a0c4a6645a30643f6ba" OR "af405e731e26d67f989e8ef75fa50359" OR "8070039581456a1430f4500def301b68")
+index=* earliest=-30d ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374" OR "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" OR "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84" OR "f57c165d1ef28395e2ff9cf526547b5236ddaa4c" OR "d219c60a1034d83a547efdb38e53c900015d5c8f" OR "643ce69f2f058f7893be0d54a494fc8876b340da" OR "0ab793a1fd8e2d4b5bf30806f9abb880" OR "af405e731e26d67f989e8ef75fa50359" OR "8070039581456a1430f4500def301b68")
 | stats count min(_time) as first max(_time) as last by index, sourcetype, host
 ~~~
 
 **Hashes in the CIM Endpoint data model**
 
 ~~~
-| tstats summariesonly=false count from datamodel=Endpoint.Filesystem where Filesystem.file_hash IN ("3e8247aac41f0b71f906ef15994a7fbf41a25f8fc7e9ba012747ee330c235904", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84", "a1d0c98b688e65e4b1abe6af08f3270fe17eccc0", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da", "7297bc3f10a71a0c4a6645a30643f6ba", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68") earliest=-30d
+| tstats summariesonly=false count from datamodel=Endpoint.Filesystem where Filesystem.file_hash IN ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84", "f57c165d1ef28395e2ff9cf526547b5236ddaa4c", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da", "0ab793a1fd8e2d4b5bf30806f9abb880", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68") earliest=-30d
   by Filesystem.dest Filesystem.file_name Filesystem.file_path
 ~~~
 
@@ -285,9 +285,9 @@ index=* earliest=-30d ("mail.example[.]net" OR "mx.example[.]com" OR "example[.]
 **Files, processes and email attachments with these hashes**
 
 ~~~
-let sha256s = dynamic(["3e8247aac41f0b71f906ef15994a7fbf41a25f8fc7e9ba012747ee330c235904", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84"]);
-let sha1s = dynamic(["a1d0c98b688e65e4b1abe6af08f3270fe17eccc0", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da"]);
-let md5s = dynamic(["7297bc3f10a71a0c4a6645a30643f6ba", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68"]);
+let sha256s = dynamic(["820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84"]);
+let sha1s = dynamic(["f57c165d1ef28395e2ff9cf526547b5236ddaa4c", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da"]);
+let md5s = dynamic(["0ab793a1fd8e2d4b5bf30806f9abb880", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68"]);
 union isfuzzy=true
   (DeviceFileEvents | where SHA256 in (sha256s) or SHA1 in (sha1s) or MD5 in (md5s)),
   (DeviceProcessEvents | where SHA256 in (sha256s) or SHA1 in (sha1s) or MD5 in (md5s)),
@@ -353,12 +353,12 @@ union isfuzzy=true
 **Files and processes with these hashes** (Set the time picker to the last 30 days.)
 
 ~~~
-file.hash.sha256 : ("3e8247aac41f0b71f906ef15994a7fbf41a25f8fc7e9ba012747ee330c235904" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
-process.hash.sha256 : ("3e8247aac41f0b71f906ef15994a7fbf41a25f8fc7e9ba012747ee330c235904" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
-file.hash.sha1 : ("a1d0c98b688e65e4b1abe6af08f3270fe17eccc0" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
-process.hash.sha1 : ("a1d0c98b688e65e4b1abe6af08f3270fe17eccc0" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
-file.hash.md5 : ("7297bc3f10a71a0c4a6645a30643f6ba" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68") or
-process.hash.md5 : ("7297bc3f10a71a0c4a6645a30643f6ba" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68")
+file.hash.sha256 : ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
+process.hash.sha256 : ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
+file.hash.sha1 : ("f57c165d1ef28395e2ff9cf526547b5236ddaa4c" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
+process.hash.sha1 : ("f57c165d1ef28395e2ff9cf526547b5236ddaa4c" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
+file.hash.md5 : ("0ab793a1fd8e2d4b5bf30806f9abb880" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68") or
+process.hash.md5 : ("0ab793a1fd8e2d4b5bf30806f9abb880" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68")
 ~~~
 
 **Files with these names** (Set the time picker to the last 30 days.)
@@ -399,6 +399,9 @@ url.full : ("hxxps://login.micros0ft-support.example[.]com/owa/?u=1" or "hxxps:/
 | archive | not applicable | 0.00s |  |
 | script | not applicable | 0.00s |  |
 | pdf | not applicable | 0.00s |  |
+| web | not applicable | 0.00s |  |
+| rtf | not applicable | 0.00s |  |
+| vhd | not applicable | 0.00s |  |
 | yara | UNAVAILABLE | 0.01s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
 | strings | ran | 0.01s |  |
 | behavior | ran | 0.00s |  |

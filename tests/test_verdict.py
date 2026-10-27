@@ -63,6 +63,10 @@ CASES = [
     ("V-MAL-06", dict(kind="pdf", findings=[("pdf.embedded_executable", H, "pdf")])),
     ("V-MAL-07", dict(kind="script", findings=[("script.download_execute", H, "script")])),
     ("V-MAL-08", dict(kind="pdf", findings=[("pdf.launch", H, "pdf")])),
+    ("V-MAL-11", dict(kind="html", findings=[("web.smuggling", H, "web")])),
+    ("V-MAL-12", dict(kind="rtf", findings=[("rtf.equation_object", M, "rtf"),
+                                            ("rtf.objupdate", M, "rtf")])),
+    ("V-MAL-13", dict(kind="html", findings=[("web.credential_exfil", H, "web")])),
     ("V-MAL-09", dict(kind="zip", children=[child("malicious")])),
     ("V-MAL-10", dict(findings=[("pe.x", H, "pe"), ("identify.double_extension", H, "identify")])),
     ("V-SUS-01", dict(findings=[("pe.x", H, "pe")])),
@@ -76,6 +80,7 @@ CASES = [
     ("V-CNA-03", dict(kind="zip", data={"archive": {"members": [
         {"name": "a", "stored": None, "skipped": "not extracted: limit"}]}})),
     ("V-CNA-04", dict(kind="zip", children=[child("could not analyze")])),
+    ("V-CNA-05", dict(kind="vhd")),
     ("V-NF-01", dict(findings=[("pe.a", M, "pe"), ("pe.b", L, "pe")])),
 ]
 

@@ -9,7 +9,7 @@
 | Size | 618 bytes |
 | SHA256 | `edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76` |
 | Checks incomplete | 1 (see warnings below) |
-| Generated | 2026-10-24T22:23:48+00:00 by unopened 0.1.0 |
+| Generated | 2026-10-27T20:09:29+00:00 by unopened 1.0.0 |
 
 ## Warning: some checks did not complete
 
@@ -194,11 +194,14 @@ file.name : ("Invoice.pdf.lnk")
 | capa | not applicable | 0.00s |  |
 | floss | not applicable | 0.00s |  |
 | office | not applicable | 0.00s |  |
-| lnk | ran | 0.06s |  |
+| lnk | ran | 0.03s |  |
 | email | not applicable | 0.00s |  |
 | archive | not applicable | 0.00s |  |
 | script | not applicable | 0.00s |  |
 | pdf | not applicable | 0.00s |  |
+| web | not applicable | 0.00s |  |
+| rtf | not applicable | 0.00s |  |
+| vhd | not applicable | 0.00s |  |
 | yara | UNAVAILABLE | 0.01s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
 | strings | ran | 0.00s |  |
 | behavior | ran | 0.00s |  |

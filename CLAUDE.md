@@ -59,7 +59,9 @@ It is a new, standalone project. Do not reference, copy from, or model it on any
 - **M9**: Damaged-input testing (`tests/test_fuzz.py`, seeded mutations of every fixture through the pipeline and all writers; no crash and no silent failure allowed), plus the fixes it found: damaged-ZIP recovery from local headers and TLSH on low-variation input.
 - **M10**: Presentation: example reports generated from fixtures (`scripts/make_examples.py`, reports only, never inputs), README screenshot, Dockerfile (unprivileged, run with `--network none`) with a CI build-and-smoke job.
 
-M1 to M10 are complete. Next work needs the analysis VM: a fresh holdout set, a benign-corpus rerun with FLOSS and the capa fallback, and patterns for compiled loaders (see "What remains" in `docs/validation.md`).
+- **M11**: Web and document delivery formats: HTML and SVG (smuggled payloads decoded as text and triaged recursively, redirects, credential forms, SVG scripts), HTA and WSF (script blocks through the script analyzer), RTF (rtfobj objects, Equation Editor exploit shape, remote objects and templates), VHD/VHDX identified and reported as not analyzed. Synthetic fixtures in `tests/fixtures/web.py`.
+
+M1 to M11 are complete. Next work needs the analysis VM: a fresh holdout set, a benign-corpus rerun with FLOSS, the capa fallback and the M11 formats, and patterns for compiled loaders (see "What remains" in `docs/validation.md`).
 
 At the start of each milestone, plan first: propose structure, dependencies and tests, then wait for approval before writing code. Finish each milestone with passing tests and a commit.
 

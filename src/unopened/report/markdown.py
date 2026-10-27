@@ -97,6 +97,9 @@ def render(report: Report) -> str:
     lines += _section(report, "script", "Script", _script)
     lines += _section(report, "email", "Email", _email)
     lines += _section(report, "pdf", "PDF", _pdf)
+    lines += _section(report, "web", "Web page (HTML, SVG, HTA, WSF)", _web)
+    lines += _section(report, "rtf", "RTF document", _rtf)
+    lines += _section(report, "vhd", "Virtual hard disk", _vhd)
     lines += _section(report, "archive", "Archive contents", _archive)
     lines += _section(report, "floss", "Decoded and stack strings (FLOSS)", _floss)
     lines += _section(report, "yara", "YARA", _yara)
@@ -510,6 +513,91 @@ def _pdf(d: dict[str, Any]) -> list[str]:
                        [[code(e["name"]), f"{e['declared_size']:,}" if e.get("declared_size")
                          is not None else ""] for e in d["embedded"]])
     return lines
+
+
+def _web(d: dict[str, Any]) -> list[str]:
+    scripts = d.get("scripts", [])
+    langs = sorted({s["language"] for s in scripts})
+    lines = [f"Type: {esc(d.get('kind'))}. {d.get('characters', 0):,} characters, "
+             f"{d.get('visible_characters', 0):,} of them visible text. Script blocks: "
+             f"{len(scripts)}" + (f" ({esc(', '.join(langs))})" if langs else "")
+             + f", event handlers: {d.get('event_handlers', 0)}, links: {d.get('links', 0)}, "
+             f"password fields: {d.get('password_fields', 0)}. Tokenized as text; nothing was "
+             "rendered, run or fetched.", ""]
+    if d.get("title"):
+        lines += [f"Title: {code(d['title'])}", ""]
+    if d.get("hta"):
+        attrs = ", ".join(f"{code(k)}={code(v)}" for k, v in d["hta"].items())
+        lines += ["HTA application tag: " + (attrs or "present"), ""]
+    if d.get("smuggling"):
+        lines += ["**Smuggling steps:** " + esc("; ".join(d["smuggling"])) + ".", ""]
+    if d.get("payloads"):
+        lines += ["**Embedded payloads** (decoded as text, analyzed below as members):", ""]
+        lines += table(["Name", "Type", "Size", "Found in"],
+                       [[code(p["name"]), esc(p["type"]), f"{p['size']:,}", esc(p["found_in"])]
+                        for p in d["payloads"]])
+    if d.get("navigations"):
+        lines += table(["Navigation", "Target"],
+                       [[esc(n["how"]), code(n["target"][:200])]
+                        for n in d["navigations"][:20]])
+    forms = d.get("forms", [])
+    if forms:
+        lines += table(["Form action", "Method", "Password field"],
+                       [[code(f["action"] or "(none)"), esc(f["method"]),
+                         "yes" if f["password"] else "no"] for f in forms])
+    if d.get("external_scripts"):
+        lines += ["External scripts (not fetched): "
+                  + ", ".join(code(s) for s in d["external_scripts"][:10]), ""]
+    if d.get("layers"):
+        steps = ", ".join(f"{esc(x['technique'])} x{x['count']}" for x in d["layers"])
+        lines += [f"Script deobfuscation (text transformations only): {steps}.", ""]
+    if d.get("keywords"):
+        lines += table(["Keyword", "Severity", "Matched"],
+                       [[esc(k["title"]), esc(k["severity"]), code(k["match"])]
+                        for k in d["keywords"]])
+    if d.get("deobfuscated"):
+        text = d["deobfuscated"]
+        fence = "~~~~" if "~~~" in text else "~~~"
+        lines += ["<details><summary>Deobfuscated script text</summary>", "", fence, text,
+                  fence, "", "</details>", ""]
+    return lines
+
+
+def _rtf(d: dict[str, Any]) -> list[str]:
+    lines = [f"Header: {code(d.get('header', ''))}"
+             + ("" if d.get("standard_header") else " (non-standard)")
+             + f". Objects: {len(d.get('objects', []))}, \\objupdate: {d.get('objupdate', 0)}.",
+             ""]
+    if d.get("remote_template"):
+        lines += [f"Remote template: {code(d['remote_template'])}", ""]
+    objects = d.get("objects", [])
+    if objects:
+        rows = []
+        for o in objects:
+            eq = o.get("equation")
+            note = ""
+            if eq is not None:
+                note = (f"Equation Editor, font name {eq['font_name_length']} bytes"
+                        if eq.get("font_name_length") is not None else "Equation Editor")
+            elif o.get("note"):
+                note = o["note"]
+            rows.append([str(o["index"]), esc(o.get("class") or ""),
+                         code(o.get("filename") or ""), f"{o['size']:,}",
+                         esc(o.get("clsid_description") or ""), esc(note)])
+        lines += table(["#", "Class", "File", "Bytes", "CLSID", "Note"], rows)
+    return lines
+
+
+def _vhd(d: dict[str, Any]) -> list[str]:
+    facts = [f"Format: {esc(d.get('format'))}"]
+    for key, label in [("disk_type", "disk type"), ("creator", "created by"),
+                       ("created", "created"), ("virtual_size", "virtual size")]:
+        if d.get(key):
+            value = f"{d[key]:,} bytes" if key == "virtual_size" else str(d[key])
+            facts.append(f"{label} {esc(value)}")
+    if d.get("partition_types"):
+        facts.append("partition types " + ", ".join(d["partition_types"]))
+    return [". ".join(facts) + ". The files inside were not extracted.", ""]
 
 
 EMAIL_HEADERS = [

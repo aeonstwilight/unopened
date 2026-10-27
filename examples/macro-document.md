@@ -9,7 +9,7 @@
 | Size | 6,656 bytes |
 | SHA256 | `614a9e295ec1ec86a7fed597801cefd16765be3ac129e23d34afe6a26673c2f0` |
 | Checks incomplete | 1 (see warnings below) |
-| Generated | 2026-10-24T22:23:48+00:00 by unopened 0.1.0 |
+| Generated | 2026-10-27T20:09:29+00:00 by unopened 1.0.0 |
 
 ## Warning: some checks did not complete
 
@@ -232,7 +232,7 @@ url.full : ("hxxp://payload.example[.]com/x.exe")
 | Analyzer | Status | Time | Message |
 |---|---|---|---|
 | hashes | ran | 0.00s |  |
-| tlsh | ran | 0.00s |  |
+| tlsh | ran | 0.01s |  |
 | pe | not applicable | 0.00s |  |
 | authenticode | not applicable | 0.00s |  |
 | capa | not applicable | 0.00s |  |
@@ -243,7 +243,10 @@ url.full : ("hxxp://payload.example[.]com/x.exe")
 | archive | not applicable | 0.00s |  |
 | script | not applicable | 0.00s |  |
 | pdf | not applicable | 0.00s |  |
-| yara | UNAVAILABLE | 0.00s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
+| web | not applicable | 0.00s |  |
+| rtf | not applicable | 0.00s |  |
+| vhd | not applicable | 0.00s |  |
+| yara | UNAVAILABLE | 0.01s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
 | strings | ran | 0.00s |  |
 | behavior | ran | 0.00s |  |
 
