@@ -8,7 +8,7 @@
 # --network none is the point: the container cannot reach anything, so even a bug could
 # not fetch or send a sample. Reputation lookups (--reputation) need the network and are
 # the one exception.
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 LABEL org.opencontainers.image.title="unopened" \
       org.opencontainers.image.description="Static malware triage for SOC analysts. Never executes the sample." \
