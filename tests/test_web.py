@@ -99,7 +99,7 @@ def test_svg_redirect_and_script(web_fx, make_file):
 def test_credential_form(web_fx, make_file):
     r = triage(make_file, "login.html", web_fx.credential_form_html())
     f = next(x for x in r.findings() if x.id == "web.credential_form")
-    assert f.severity.value == "high" and "microsoft" in f.detail
+    assert f.severity.value == "high" and "Microsoft" in f.detail
     assert r.verdict["value"] == "suspicious"
 
 
@@ -160,3 +160,12 @@ def test_reports_are_defanged_and_scriptless(web_fx, make_file):
     page = html_report.render(r)
     assert "<script" not in page
     assert "api.telegram.org" in json_report.render(r)  # raw values stay in JSON only
+
+
+def test_credential_exfil_through_form_action(web_fx, make_file):
+    # Regression: a form posting straight to the bot API (no script) crashed the analyzer.
+    page = web_fx.credential_form_html("https://api.telegram.org/botFIXTURE/sendMessage")
+    r = triage(make_file, "login.html", page)
+    assert r.result("web").status.value == "ok"
+    assert ids(r)["web.credential_exfil"] == "high"
+    assert r.verdict["rule"] == "V-MAL-13"

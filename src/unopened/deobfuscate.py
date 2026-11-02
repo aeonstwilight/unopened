@@ -120,6 +120,7 @@ def _pass_base64(text: str) -> tuple[str, int]:
     found = find_encoded_command(text)
     if found and found[1] is not None:
         m, decoded = found
+        assert decoded is not None
         count += 1
         text = text[:m.start(2)] + _quote(decoded) + text[m.end(2):]
     return text, count
@@ -140,8 +141,9 @@ def _pass_charcodes(text: str) -> tuple[str, int]:
 
     def many(m: re.Match[str]) -> str:
         nonlocal count
-        chars = [_char(_num(t)) for t in m.group(1).split(",")]
-        if None in chars:
+        maybe = [_char(_num(t)) for t in m.group(1).split(",")]
+        chars = [c for c in maybe if c is not None]
+        if len(chars) != len(maybe):
             return m.group(0)
         count += 1
         return _quote("".join(chars), '"')
@@ -155,8 +157,9 @@ def _pass_charcodes(text: str) -> tuple[str, int]:
         window = text[max(0, m.start() - 80): m.end() + 80]
         if not CHAR_CONTEXT.search(window):
             return m.group(0)
-        chars = [_char(int(t)) for t in m.group(1).split(",")]
-        if None in chars or not all(c.isprintable() or c.isspace() for c in chars):
+        maybe = [_char(int(t)) for t in m.group(1).split(",")]
+        chars = [c for c in maybe if c is not None]
+        if len(chars) != len(maybe) or not all(c.isprintable() or c.isspace() for c in chars):
             return m.group(0)
         count += 1
         return _quote("".join(chars))

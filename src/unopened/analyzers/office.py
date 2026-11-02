@@ -246,7 +246,8 @@ def _dde(part: str, blob: bytes, et: Any, out: AnalyzerOutput, texts: list[str])
         out.errors.append(f"{part}: unparseable XML ({type(exc).__name__}: {exc})")
         return
     # Field codes are split across runs; join them in document order.
-    fields, current = [], []
+    fields: list[str] = []
+    current: list[str] = []
     for el in root.iter():
         if el.tag == f"{W_NS}fldChar":
             kind = el.get(f"{W_NS}fldCharType")

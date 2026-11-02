@@ -58,7 +58,8 @@ def _worker(analyzer: Analyzer, ctx: Context, conn: Any) -> None:
 def _run_isolated(analyzer: Analyzer, ctx: Context, timeout: float) -> tuple[str, Any]:
     mp = multiprocessing.get_context(_start_method())
     recv_conn, send_conn = mp.Pipe(duplex=False)
-    proc = mp.Process(target=_worker, args=(analyzer, ctx, send_conn), daemon=True)
+    proc = mp.Process(  # type: ignore[attr-defined]
+        target=_worker, args=(analyzer, ctx, send_conn), daemon=True)
     proc.start()
     send_conn.close()
     try:
@@ -97,8 +98,8 @@ def run_analyzer(analyzer: Analyzer, ctx: Context, *, isolate: bool = True,
                               f"not run: the {budget:g}-second time budget for this file "
                               "was used up by earlier checks")
     own = ctx.options.timeout_for(analyzer.name)
-    clipped = time_left is not None and time_left < own
-    timeout = time_left if clipped else own
+    timeout = own if time_left is None else min(own, time_left)
+    clipped = timeout < own
     start = time.monotonic()
     if isolate:
         kind, payload = _run_isolated(analyzer, ctx, timeout)

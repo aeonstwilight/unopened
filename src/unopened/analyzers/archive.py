@@ -258,7 +258,7 @@ def _sevenzip(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
     if not wanted:
         return
 
-    tries: list[str | None] = [None] if not needs_password else _passwords(ctx)
+    tries: list[str | None] = [None] if not needs_password else list(_passwords(ctx))
     for pw in tries:
         if pw is not None and pw not in out.data["passwords_tried"]:
             out.data["passwords_tried"].append(pw)
@@ -377,7 +377,7 @@ def _iso(ctx: Context, w: MemberWriter, out: AnalyzerOutput) -> None:
                     continue
                 try:
                     with sink:
-                        iso.get_file_from_iso_fp(sink, **{key: full})
+                        iso.get_file_from_iso_fp(sink, **{key: full})  # type: ignore[arg-type]
                 except Exception as exc:
                     out.errors.append(f"{display}: {type(exc).__name__}: {exc}")
         out.data["member_count"] = count

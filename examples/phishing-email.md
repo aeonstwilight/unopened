@@ -7,15 +7,9 @@
 | Verdict | **MALICIOUS** (high confidence, rule V-MAL-06) |
 | File type | Email message (.eml, RFC 5322) |
 | Size | 2,939 bytes |
-| SHA256 | `820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374` |
-| Checks incomplete | 1 (see warnings below) |
-| Generated | 2026-10-27T20:09:29+00:00 by unopened 1.0.0 |
-
-## Warning: some checks did not complete
-
-- **yara**: UNAVAILABLE. no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
-
-A check that did not complete is not a clean result.
+| SHA256 | `6de26a28a56a377cbbe108d220ffaef93fb81b517ec0ae0a904e5a8a9f455d9b` |
+| Checks incomplete | 0 |
+| Generated | 2026-11-02T15:24:04+00:00 by unopened 1.0.1 |
 
 ## Verdict
 
@@ -27,40 +21,39 @@ A check that did not complete is not a clean result.
   - Invoice.pdf.lnk: malicious (high)
 - **V-MAL-10** (malicious): Two or more HIGH findings from different analyzers.
   - DMARC failed for the sender's domain
-  - The sender domain imitates microsoft
+  - The sender domain imitates Microsoft
   - The email body contains a form with a password field
   - Links go to domains imitating a known brand
   - Attachment with a runnable extension: Invoice.pdf.lnk
   - Member disguised as a different file type
 - **V-SUS-01** (suspicious): At least one HIGH finding.
   - DMARC failed for the sender's domain
-  - The sender domain imitates microsoft
+  - The sender domain imitates Microsoft
   - The email body contains a form with a password field
   - Links go to domains imitating a known brand
   - Attachment with a runnable extension: Invoice.pdf.lnk
   - Member disguised as a different file type
 - **V-SUS-04** (suspicious): Three or more MEDIUM findings.
   - Sender authentication failed: spf=fail
-  - Display name uses the microsoft brand, but the address is not theirs
+  - Display name uses the Microsoft brand, but the address is not theirs
   - Replies go to a different organization than the sender
   - Link text names a different site than the link opens (1)
   - Links point to raw IP addresses
   - HTML attachment: Statement.html
   - Contains programs, shortcuts or scripts (1)
-- note: some checks did not complete (yara unavailable); the evidence above still stands
 
 _Produced by fixed, documented rules (verdict-rules in the project's docs folder), not by a model. Every verdict lists its reasons; see Not checked for what was not examined._
 
 ## Key findings
 
 - **[HIGH] DMARC failed for the sender's domain**: The receiving server recorded dmarc=fail: the message is not authenticated as coming from micros0ft-support.example[.]com. The From address is likely spoofed.
-- **[HIGH] The sender domain imitates microsoft**: 'micros0ft-support.example[.]com' contains the microsoft name but is not one of its domains.
+- **[HIGH] The sender domain imitates Microsoft**: 'micros0ft-support.example[.]com' contains the Microsoft name but is not one of its domains.
 - **[HIGH] The email body contains a form with a password field**: Submits to 'hxxps://collect.example[.]net/post'. Legitimate mail almost never asks for input in the message itself; this is a credential-harvesting pattern.
-- **[HIGH] Links go to domains imitating a known brand**: login.micros0ft-support.example[.]com (microsoft)
+- **[HIGH] Links go to domains imitating a known brand**: login.micros0ft-support.example[.]com (Microsoft)
 - **[HIGH] Attachment with a runnable extension: Invoice.pdf.lnk**: Windows runs .lnk files on double-click. Analyzed below.
 - **[HIGH] Member disguised as a different file type**: Invoice.pdf.lnk. See the member's section for details.
 - **[MEDIUM] Sender authentication failed: spf=fail**: Recorded by the receiving server. Forwarding and mailing lists can break SPF and DKIM, so read this with the other findings.
-- **[MEDIUM] Display name uses the microsoft brand, but the address is not theirs**: 'Microsoft 365' sent from 'micros0ft-support.example[.]com'.
+- **[MEDIUM] Display name uses the Microsoft brand, but the address is not theirs**: 'Microsoft 365' sent from 'micros0ft-support.example[.]com'.
 - **[MEDIUM] Replies go to a different organization than the sender**: From 'micros0ft-support.example[.]com', Reply-To 'example[.]org'. A common setup for invoice and payroll fraud: the reply reaches the attacker.
 - **[MEDIUM] Link text names a different site than the link opens (1)**: login.microsoftonline[.]com -\> login.micros0ft-support.example[.]com. Mailing services also do this for click tracking, so check the destinations.
 - **[MEDIUM] Links point to raw IP addresses**: 192.0.2[.]10
@@ -83,10 +76,10 @@ _Produced by fixed, documented rules (verdict-rules in the project's docs folder
 
 | Hash | Value |
 |---|---|
-| MD5 | `0ab793a1fd8e2d4b5bf30806f9abb880` |
-| SHA1 | `f57c165d1ef28395e2ff9cf526547b5236ddaa4c` |
-| SHA256 | `820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374` |
-| TLSH | `T13651B6719C0035C18329BC68916576282C3047971AD7E868AED84BFA1CDCF4AF6F12C1` |
+| MD5 | `12e665a1ed789674f7cdd18d7dce5caf` |
+| SHA1 | `ad0831edf51fab1acc06d22e4da9e537817dcc8e` |
+| SHA256 | `6de26a28a56a377cbbe108d220ffaef93fb81b517ec0ae0a904e5a8a9f455d9b` |
+| TLSH | `T1B451B6B15C01318593A9FDA84050772D2C305A6B5AD7E8A4ABD446FA0CCEB8EF2F17C4` |
 
 ## Email
 
@@ -121,7 +114,8 @@ Links (3), none followed:
 
 ## YARA
 
-**Not checked** (UNAVAILABLE): no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
+2 rules from 2 of 2 rule file(s); 0 matched.
+
 
 ## Members
 
@@ -143,18 +137,14 @@ Each extracted member was triaged on its own. Their indicators are merged into t
 - **[MEDIUM] Command asks for a hidden window**: The program is told to run without showing a window.
 - **[LOW] Shortcut starts its program minimized**: Used to keep a console window from being noticed.
 
-Not fully checked: yara UNAVAILABLE
-
 ### Member: `Statement.html`
 
 |  |  |
 |---|---|
-| Verdict | **NO FINDINGS** (low, V-NF-01) |
+| Verdict | **NO FINDINGS** (medium, V-NF-01) |
 | Type | HTML document |
 | Size | 41 bytes |
 | SHA256 | `504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84` |
-
-Not fully checked: yara UNAVAILABLE
 
 ## Indicators
 
@@ -234,14 +224,14 @@ Searches for this file's hashes, names and network indicators over the last 30 d
 **Hashes in any indexed data (raw terms)**
 
 ~~~
-index=* earliest=-30d ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374" OR "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" OR "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84" OR "f57c165d1ef28395e2ff9cf526547b5236ddaa4c" OR "d219c60a1034d83a547efdb38e53c900015d5c8f" OR "643ce69f2f058f7893be0d54a494fc8876b340da" OR "0ab793a1fd8e2d4b5bf30806f9abb880" OR "af405e731e26d67f989e8ef75fa50359" OR "8070039581456a1430f4500def301b68")
+index=* earliest=-30d ("6de26a28a56a377cbbe108d220ffaef93fb81b517ec0ae0a904e5a8a9f455d9b" OR "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" OR "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84" OR "ad0831edf51fab1acc06d22e4da9e537817dcc8e" OR "d219c60a1034d83a547efdb38e53c900015d5c8f" OR "643ce69f2f058f7893be0d54a494fc8876b340da" OR "12e665a1ed789674f7cdd18d7dce5caf" OR "af405e731e26d67f989e8ef75fa50359" OR "8070039581456a1430f4500def301b68")
 | stats count min(_time) as first max(_time) as last by index, sourcetype, host
 ~~~
 
 **Hashes in the CIM Endpoint data model**
 
 ~~~
-| tstats summariesonly=false count from datamodel=Endpoint.Filesystem where Filesystem.file_hash IN ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84", "f57c165d1ef28395e2ff9cf526547b5236ddaa4c", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da", "0ab793a1fd8e2d4b5bf30806f9abb880", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68") earliest=-30d
+| tstats summariesonly=false count from datamodel=Endpoint.Filesystem where Filesystem.file_hash IN ("6de26a28a56a377cbbe108d220ffaef93fb81b517ec0ae0a904e5a8a9f455d9b", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84", "ad0831edf51fab1acc06d22e4da9e537817dcc8e", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da", "12e665a1ed789674f7cdd18d7dce5caf", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68") earliest=-30d
   by Filesystem.dest Filesystem.file_name Filesystem.file_path
 ~~~
 
@@ -285,9 +275,9 @@ index=* earliest=-30d ("mail.example[.]net" OR "mx.example[.]com" OR "example[.]
 **Files, processes and email attachments with these hashes**
 
 ~~~
-let sha256s = dynamic(["820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84"]);
-let sha1s = dynamic(["f57c165d1ef28395e2ff9cf526547b5236ddaa4c", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da"]);
-let md5s = dynamic(["0ab793a1fd8e2d4b5bf30806f9abb880", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68"]);
+let sha256s = dynamic(["6de26a28a56a377cbbe108d220ffaef93fb81b517ec0ae0a904e5a8a9f455d9b", "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76", "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84"]);
+let sha1s = dynamic(["ad0831edf51fab1acc06d22e4da9e537817dcc8e", "d219c60a1034d83a547efdb38e53c900015d5c8f", "643ce69f2f058f7893be0d54a494fc8876b340da"]);
+let md5s = dynamic(["12e665a1ed789674f7cdd18d7dce5caf", "af405e731e26d67f989e8ef75fa50359", "8070039581456a1430f4500def301b68"]);
 union isfuzzy=true
   (DeviceFileEvents | where SHA256 in (sha256s) or SHA1 in (sha1s) or MD5 in (md5s)),
   (DeviceProcessEvents | where SHA256 in (sha256s) or SHA1 in (sha1s) or MD5 in (md5s)),
@@ -353,12 +343,12 @@ union isfuzzy=true
 **Files and processes with these hashes** (Set the time picker to the last 30 days.)
 
 ~~~
-file.hash.sha256 : ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
-process.hash.sha256 : ("820130ec37bb2d97aadab7d47e93e425d4380f1b9570faddcac2cb70e0e35374" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
-file.hash.sha1 : ("f57c165d1ef28395e2ff9cf526547b5236ddaa4c" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
-process.hash.sha1 : ("f57c165d1ef28395e2ff9cf526547b5236ddaa4c" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
-file.hash.md5 : ("0ab793a1fd8e2d4b5bf30806f9abb880" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68") or
-process.hash.md5 : ("0ab793a1fd8e2d4b5bf30806f9abb880" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68")
+file.hash.sha256 : ("6de26a28a56a377cbbe108d220ffaef93fb81b517ec0ae0a904e5a8a9f455d9b" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
+process.hash.sha256 : ("6de26a28a56a377cbbe108d220ffaef93fb81b517ec0ae0a904e5a8a9f455d9b" or "edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76" or "504b6ce5d5fef8e932d9ee4cb07554f42b5200de47dee1bbdea84d65ea1dce84") or
+file.hash.sha1 : ("ad0831edf51fab1acc06d22e4da9e537817dcc8e" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
+process.hash.sha1 : ("ad0831edf51fab1acc06d22e4da9e537817dcc8e" or "d219c60a1034d83a547efdb38e53c900015d5c8f" or "643ce69f2f058f7893be0d54a494fc8876b340da") or
+file.hash.md5 : ("12e665a1ed789674f7cdd18d7dce5caf" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68") or
+process.hash.md5 : ("12e665a1ed789674f7cdd18d7dce5caf" or "af405e731e26d67f989e8ef75fa50359" or "8070039581456a1430f4500def301b68")
 ~~~
 
 **Files with these names** (Set the time picker to the last 30 days.)
@@ -402,11 +392,10 @@ url.full : ("hxxps://login.micros0ft-support.example[.]com/owa/?u=1" or "hxxps:/
 | web | not applicable | 0.00s |  |
 | rtf | not applicable | 0.00s |  |
 | vhd | not applicable | 0.00s |  |
-| yara | UNAVAILABLE | 0.01s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
+| yara | ran | 0.03s |  |
 | strings | ran | 0.01s |  |
 | behavior | ran | 0.00s |  |
 
 ## Not checked
 
-- **YARA rule scan**: unavailable: no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
 - **Hash reputation lookup**: off; rerun with --reputation to look up the SHA256 at MalwareBazaar and VirusTotal (only the hash is sent)

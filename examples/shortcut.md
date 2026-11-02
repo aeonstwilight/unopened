@@ -8,14 +8,8 @@
 | File type | Windows shortcut (LNK) |
 | Size | 618 bytes |
 | SHA256 | `edb699ffa6c9feaba59d53e04f43e7af80e65c0d738bf0a44cb379bb300a9b76` |
-| Checks incomplete | 1 (see warnings below) |
-| Generated | 2026-10-27T20:09:29+00:00 by unopened 1.0.0 |
-
-## Warning: some checks did not complete
-
-- **yara**: UNAVAILABLE. no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
-
-A check that did not complete is not a clean result.
+| Checks incomplete | 0 |
+| Generated | 2026-11-02T15:24:05+00:00 by unopened 1.0.1 |
 
 ## Verdict
 
@@ -33,7 +27,6 @@ A check that did not complete is not a clean result.
   - File name does not match content
   - Shortcut launches powershell.exe
   - Encoded PowerShell command
-- note: some checks did not complete (yara unavailable); the evidence above still stands
 
 _Produced by fixed, documented rules (verdict-rules in the project's docs folder), not by a model. Every verdict lists its reasons; see Not checked for what was not examined._
 
@@ -81,7 +74,8 @@ _Produced by fixed, documented rules (verdict-rules in the project's docs folder
 
 ## YARA
 
-**Not checked** (UNAVAILABLE): no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
+2 rules from 2 of 2 rule file(s); 0 matched.
+
 
 ## Indicators
 
@@ -187,14 +181,14 @@ file.name : ("Invoice.pdf.lnk")
 
 | Analyzer | Status | Time | Message |
 |---|---|---|---|
-| hashes | ran | 0.00s |  |
+| hashes | ran | 0.01s |  |
 | tlsh | ran | 0.01s |  |
 | pe | not applicable | 0.00s |  |
 | authenticode | not applicable | 0.00s |  |
 | capa | not applicable | 0.00s |  |
 | floss | not applicable | 0.00s |  |
 | office | not applicable | 0.00s |  |
-| lnk | ran | 0.03s |  |
+| lnk | ran | 0.04s |  |
 | email | not applicable | 0.00s |  |
 | archive | not applicable | 0.00s |  |
 | script | not applicable | 0.00s |  |
@@ -202,11 +196,10 @@ file.name : ("Invoice.pdf.lnk")
 | web | not applicable | 0.00s |  |
 | rtf | not applicable | 0.00s |  |
 | vhd | not applicable | 0.00s |  |
-| yara | UNAVAILABLE | 0.01s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
-| strings | ran | 0.00s |  |
+| yara | ran | 0.03s |  |
+| strings | ran | 0.01s |  |
 | behavior | ran | 0.00s |  |
 
 ## Not checked
 
-- **YARA rule scan**: unavailable: no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
 - **Hash reputation lookup**: off; rerun with --reputation to look up the SHA256 at MalwareBazaar and VirusTotal (only the hash is sent)

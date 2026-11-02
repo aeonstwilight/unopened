@@ -23,7 +23,7 @@ from ..extraction import MemberWriter
 from ..identify import LNK_MAGIC, OLE_MAGIC, SEVENZIP_MAGIC, VHDX_MAGIC
 from ..model import AnalyzerOutput, Finding, Severity
 from . import Context
-from .mail import impersonated_brand, load_brands, url_host
+from .mail import brand_name, impersonated_brand, load_brands, url_host
 from .script import MAX_TEXT, analyze_text, read_text
 
 MAX_SCRIPT_CHARS = 2 * 1024 * 1024
@@ -94,7 +94,7 @@ class _Scan(HTMLParser):
         self.scripts: list[dict[str, str]] = []
         self.external_scripts: list[str] = []
         self.handlers: list[str] = []
-        self.links: list[dict[str, str]] = []
+        self.links: list[dict[str, str | None]] = []
         self.forms: list[dict[str, Any]] = []
         self.password_fields = 0
         self.refresh: list[str] = []
@@ -369,7 +369,7 @@ def _smuggling(scripts: str, scan: _Scan, out: AnalyzerOutput) -> None:
     payloads = out.data["payloads"]
     blob, deliver = BLOB.search(scripts), DELIVER.search(scripts)
     download_links = [lk for lk in scan.links if lk.get("download") is not None
-                      and lk["href"].lower().startswith(("data:", "blob:"))]
+                      and (lk["href"] or "").lower().startswith(("data:", "blob:"))]
     long_literal = ENCODED_LITERAL.search(scripts)
     steps = []
     if DECODE.search(scripts):
@@ -387,8 +387,9 @@ def _smuggling(scripts: str, scan: _Scan, out: AnalyzerOutput) -> None:
         out.data["smuggling"] = steps
         what = (", ".join(f"{p['name']} ({p['type']}, {p['size']:,} bytes)"
                           for p in payloads[:MAX_LISTED])
-                or f"an encoded literal of {len(long_literal.group(1)):,} characters that did "
-                   "not decode to a known file type (it may be encrypted or XOR-encoded)")
+                or (f"an encoded literal of {len(long_literal.group(1)):,} characters that "
+                    "did not decode to a known file type (it may be encrypted or XOR-encoded)"
+                    if long_literal else "an embedded file"))
         out.findings.append(Finding(
             "web.smuggling", Severity.HIGH, "HTML smuggling: the page builds and drops a file",
             f"The page {'; '.join(steps)}. Payload: {what}. Opening the page in a browser "
@@ -453,9 +454,10 @@ def _credentials(scripts: str, scan: _Scan, title: str, visible: str,
     words = re.sub(r"[^a-z0-9]+", "-", f"{title} {visible[:2000]}".lower())
     brand = next((b for b in brands if re.search(rf"(?:^|-){re.escape(b)}(?:-|$)", words)),
                  None)
-    named = f" The page names {brand}." if brand else ""
-    exfil = EXFIL_SERVICE.search(scripts) or any(
-        EXFIL_SERVICE.search(f["action"]) for f in scan.forms)
+    named = f" The page names {brand_name(brand)}." if brand else ""
+    # A script that posts to the service, or a form whose action is the service itself.
+    exfil = EXFIL_SERVICE.search(scripts) or next(
+        (m for f in scan.forms if (m := EXFIL_SERVICE.search(f["action"]))), None)
     if exfil:
         out.findings.append(Finding(
             "web.credential_exfil", Severity.HIGH,
@@ -473,7 +475,8 @@ def _credentials(scripts: str, scan: _Scan, title: str, visible: str,
         out.findings.append(Finding(
             "web.credential_form", Severity.HIGH, "Password form that submits to a web server",
             f"A local page with a password field {target}"
-            + (f", a domain imitating {impersonated_brand(url_host(lookalike[0]), brands)}"
+            + (f", a domain imitating "
+               f"{brand_name(impersonated_brand(url_host(lookalike[0]), brands))}"
                if lookalike else "")
             + f". Saved or attached pages have no reason to collect passwords.{named}",
         ))

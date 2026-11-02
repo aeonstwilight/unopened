@@ -34,6 +34,8 @@ jobs:
           python -c "import signify.authenticode"  # fail here, clearly, if it still cannot load
       - name: Lint
         run: ruff check src tests
+      - name: Type check
+        run: mypy
       - name: Verdict rules documentation is current
         run: |
           python -m unopened.verdict > /tmp/verdict-rules.md

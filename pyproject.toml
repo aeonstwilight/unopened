@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "unopened"
-version = "1.0.0"
+version = "1.0.1"
 description = "Static malware triage for SOC analysts. Never executes the sample."
 readme = "README.md"
 license = "MIT"
@@ -46,7 +46,7 @@ all = [
     "yara-python>=4.3", "flare-capa>=9.0", "py7zr>=1.0", "pyzipper>=0.3.6", "pycdlib>=1.14",
     "pypdf>=6.0", "flare-floss>=3.1",
 ]
-dev = ["pytest>=8", "ruff>=0.5"]
+dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10"]
 
 [project.urls]
 Homepage = "https://github.com/aeonstwilight/unopened"
@@ -73,6 +73,11 @@ filterwarnings = [
 markers = [
     "corpus: false-positive measurement over a benign corpus kept outside the repo (set UNOPENED_CORPUS)",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+files = ["src/unopened"]
 
 [tool.ruff]
 line-length = 100

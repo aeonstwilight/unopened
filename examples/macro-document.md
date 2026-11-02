@@ -8,14 +8,8 @@
 | File type | Word 97-2003 document (OLE) with a VBA project (macros) |
 | Size | 6,656 bytes |
 | SHA256 | `614a9e295ec1ec86a7fed597801cefd16765be3ac129e23d34afe6a26673c2f0` |
-| Checks incomplete | 1 (see warnings below) |
-| Generated | 2026-10-27T20:09:29+00:00 by unopened 1.0.0 |
-
-## Warning: some checks did not complete
-
-- **yara**: UNAVAILABLE. no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
-
-A check that did not complete is not a clean result.
+| Checks incomplete | 0 |
+| Generated | 2026-11-02T15:24:05+00:00 by unopened 1.0.1 |
 
 ## Verdict
 
@@ -26,7 +20,6 @@ A check that did not complete is not a clean result.
   - macro uses Shell, WScript[.]Shell
 - **V-SUS-01** (suspicious): At least one HIGH finding.
   - Macros run automatically (AutoOpen)
-- note: some checks did not complete (yara unavailable); the evidence above still stands
 
 _Produced by fixed, documented rules (verdict-rules in the project's docs folder), not by a model. Every verdict lists its reasons; see Not checked for what was not examined._
 
@@ -89,7 +82,8 @@ End Sub
 
 ## YARA
 
-**Not checked** (UNAVAILABLE): no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
+2 rules from 2 of 2 rule file(s); 0 matched.
+
 
 ## Indicators
 
@@ -231,13 +225,13 @@ url.full : ("hxxp://payload.example[.]com/x.exe")
 
 | Analyzer | Status | Time | Message |
 |---|---|---|---|
-| hashes | ran | 0.00s |  |
+| hashes | ran | 0.01s |  |
 | tlsh | ran | 0.01s |  |
 | pe | not applicable | 0.00s |  |
 | authenticode | not applicable | 0.00s |  |
 | capa | not applicable | 0.00s |  |
 | floss | not applicable | 0.00s |  |
-| office | ran | 0.09s |  |
+| office | ran | 0.11s |  |
 | lnk | not applicable | 0.00s |  |
 | email | not applicable | 0.00s |  |
 | archive | not applicable | 0.00s |  |
@@ -246,13 +240,12 @@ url.full : ("hxxp://payload.example[.]com/x.exe")
 | web | not applicable | 0.00s |  |
 | rtf | not applicable | 0.00s |  |
 | vhd | not applicable | 0.00s |  |
-| yara | UNAVAILABLE | 0.01s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
-| strings | ran | 0.00s |  |
+| yara | ran | 0.04s |  |
+| strings | ran | 0.01s |  |
 | behavior | ran | 0.00s |  |
 
 ## Not checked
 
 - **Office macros, auto-run triggers, embedded objects and external references**: DDE fields in legacy binary Word documents
-- **YARA rule scan**: unavailable: no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
 - **Files embedded in Office documents**: listed, not extracted or analyzed
 - **Hash reputation lookup**: off; rerun with --reputation to look up the SHA256 at MalwareBazaar and VirusTotal (only the hash is sent)

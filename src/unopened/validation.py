@@ -491,7 +491,7 @@ def summary(results: list[Result], failures: list[str], unused: list[Expectation
 
     checked = [r for r in results if r.verdict_ok is not None]
     if checked:
-        ok = sum(r.verdict_ok for r in checked)
+        ok = sum(1 for r in checked if r.verdict_ok)
         lines += ["", f"Expected verdict met on **{ok} of {len(checked)}** samples with an "
                   "expected verdict."]
 

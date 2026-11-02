@@ -8,14 +8,8 @@
 | File type | HTML document |
 | Size | 2,617 bytes |
 | SHA256 | `880e8906903d4ca7d9c8b495bd589ece59afb47e262ccd42f7ab4234badb2249` |
-| Checks incomplete | 1 (see warnings below) |
-| Generated | 2026-10-27T20:09:30+00:00 by unopened 1.0.0 |
-
-## Warning: some checks did not complete
-
-- **yara**: UNAVAILABLE. no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
-
-A check that did not complete is not a clean result.
+| Checks incomplete | 0 |
+| Generated | 2026-11-02T15:24:07+00:00 by unopened 1.0.1 |
 
 ## Verdict
 
@@ -28,7 +22,6 @@ A check that did not complete is not a clean result.
 - **V-SUS-01** (suspicious): At least one HIGH finding.
   - HTML smuggling: the page builds and drops a file
   - Embedded Windows program (PE): update.exe
-- note: some checks did not complete (yara unavailable); the evidence above still stands
 
 _Produced by fixed, documented rules (verdict-rules in the project's docs folder), not by a model. Every verdict lists its reasons; see Not checked for what was not examined._
 
@@ -72,7 +65,8 @@ Title: `Document viewer`
 
 ## YARA
 
-**Not checked** (UNAVAILABLE): no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
+2 rules from 2 of 2 rule file(s); 0 matched.
+
 
 ## Members
 
@@ -82,12 +76,10 @@ Each extracted member was triaged on its own. Their indicators are merged into t
 
 |  |  |
 |---|---|
-| Verdict | **NO FINDINGS** (low, V-NF-01) |
+| Verdict | **NO FINDINGS** (medium, V-NF-01) |
 | Type | PE32 executable (x86, console) |
 | Size | 1,536 bytes |
 | SHA256 | `c6e3459a8967784cba2e9d8a0001f7a101b5b3d5e0bd82a27da3147f1128da13` |
-
-Not fully checked: capa UNAVAILABLE; yara UNAVAILABLE
 
 ## Indicators
 
@@ -179,7 +171,7 @@ file.name : ("Invoice.html" or "update.exe")
 
 | Analyzer | Status | Time | Message |
 |---|---|---|---|
-| hashes | ran | 0.00s |  |
+| hashes | ran | 0.01s |  |
 | tlsh | ran | 0.01s |  |
 | pe | not applicable | 0.00s |  |
 | authenticode | not applicable | 0.00s |  |
@@ -191,14 +183,13 @@ file.name : ("Invoice.html" or "update.exe")
 | archive | not applicable | 0.00s |  |
 | script | not applicable | 0.00s |  |
 | pdf | not applicable | 0.00s |  |
-| web | ran | 0.01s |  |
+| web | ran | 0.02s |  |
 | rtf | not applicable | 0.00s |  |
 | vhd | not applicable | 0.00s |  |
-| yara | UNAVAILABLE | 0.01s | no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES |
-| strings | ran | 0.00s |  |
+| yara | ran | 0.03s |  |
+| strings | ran | 0.01s |  |
 | behavior | ran | 0.00s |  |
 
 ## Not checked
 
-- **YARA rule scan**: unavailable: no YARA rules configured; pass --yara-rules DIR or set UNOPENED\_YARA\_RULES
 - **Hash reputation lookup**: off; rerun with --reputation to look up the SHA256 at MalwareBazaar and VirusTotal (only the hash is sent)
