@@ -165,7 +165,7 @@ def _check_target(info: dict[str, Any], out: AnalyzerOutput) -> None:
 
 
 def _check_arguments(info: dict[str, Any], args: str, out: AnalyzerOutput) -> list[str]:
-    decoded_texts = []
+    decoded_texts: list[str] = []
     if not args:
         return decoded_texts
     lowered = args.lower()

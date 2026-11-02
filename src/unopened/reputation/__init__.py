@@ -12,7 +12,7 @@ import json
 import os
 import re
 import urllib.parse
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -57,9 +57,10 @@ def outcome(source: str, status: str, detail: str = "", **data: Any) -> dict[str
     return {"source": source, "status": status, "detail": detail, "data": data}
 
 
-def malwarebazaar(sha256: str, key: str | None, send: Transport) -> dict[str, Any]:
+def malwarebazaar(sha256: str, key: str | None, send: Transport | None) -> dict[str, Any]:
     if not key:
         return outcome("malwarebazaar", "skipped", "ABUSECH_API_KEY is not set")
+    assert send is not None  # lookup_all creates a transport whenever a key is set
     body = urllib.parse.urlencode({"query": "get_info", "hash": sha256}).encode()
     try:
         status, raw = send("POST", MB_URL, {"Auth-Key": key,
@@ -90,9 +91,10 @@ def malwarebazaar(sha256: str, key: str | None, send: Transport) -> dict[str, An
     )
 
 
-def virustotal(sha256: str, key: str | None, send: Transport) -> dict[str, Any]:
+def virustotal(sha256: str, key: str | None, send: Transport | None) -> dict[str, Any]:
     if not key:
         return outcome("virustotal", "skipped", "VT_API_KEY is not set")
+    assert send is not None  # lookup_all creates a transport whenever a key is set
     try:
         status, raw = send("GET", VT_URL + sha256, {"x-apikey": key, "Accept": "application/json"},
                            None, TIMEOUT)
@@ -130,10 +132,10 @@ SOURCES = [("malwarebazaar", "ABUSECH_API_KEY", malwarebazaar),
 
 
 def lookup_all(hashes: list[str], max_lookups: int, send: Transport | None = None,
-               env: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
+               env: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
     """Look up each SHA256 (in order, at most max_lookups). Returns {sha256: result}."""
-    env = os.environ if env is None else env
-    if send is None and any(env.get(var) for _, var, _ in SOURCES):
+    environ: Mapping[str, str] = os.environ if env is None else env
+    if send is None and any(environ.get(var) for _, var, _ in SOURCES):
         send = default_transport()  # no key, no network module
     results: dict[str, dict[str, Any]] = {}
     stopped: dict[str, str] = {}
@@ -149,7 +151,7 @@ def lookup_all(hashes: list[str], max_lookups: int, send: Transport | None = Non
             if name in stopped:
                 sources[name] = outcome(name, "skipped", stopped[name])
                 continue
-            result = func(sha256, env.get(key_var) or None, send)
+            result = func(sha256, environ.get(key_var) or None, send)
             if result["status"] == "rate_limited":
                 stopped[name] = f"not queried: {name} rate-limited an earlier lookup"
             elif result["status"] == "error" and result["detail"].startswith("authentication"):

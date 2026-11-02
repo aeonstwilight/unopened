@@ -225,8 +225,8 @@ def _batch(args: argparse.Namespace, folder: Path) -> int:
             error(f"cannot write report: {exc}")
             return EXIT_USAGE
         v = report.verdict
-        reasons = next((r["evidence"] for r in v.get("reasons", []) if r["rule"] == v["rule"]),
-                       [])
+        reasons: list[str] = next(
+            (r["evidence"] for r in v.get("reasons", []) if r["rule"] == v["rule"]), [])
         ext = "html" if args.format == "html" else ("json" if args.format == "json" else "md")
         rows.append({
             "file": defang_text(rel), "type": report.file_type.description

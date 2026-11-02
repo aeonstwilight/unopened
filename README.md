@@ -25,41 +25,24 @@ Full example reports, generated from the synthetic test fixtures by
 [macro document](examples/macro-document.md),
 [HTML smuggling page](examples/html-smuggling.md).
 
-The top of the report for a synthetic test shortcut (built by `tests/fixtures/lnk.py`;
-its "payload" is `Write-Host fixture`), named to look like a PDF invoice:
+## What it catches
 
-```text
-| Verdict    | MALICIOUS (high confidence, rule V-MAL-03) |
-| File type  | Windows shortcut (LNK)                      |
+| Delivered as | What unopened looks for |
+|---|---|
+| Email (`.eml`, `.msg`) | Failed SPF/DKIM/DMARC, look-alike and display-name spoofing, reply-to mismatches, deceptive links, forms in the body; every attachment triaged |
+| Office documents, RTF | Auto-run macros that run or download things, DDE, remote template injection, embedded programs, the Equation Editor exploit (CVE-2017-11882) |
+| HTML, SVG, HTA | HTML smuggling (a file decoded and dropped by the page), redirect wrappers, password forms, credentials posted to Telegram or Discord, scripts in images |
+| Shortcuts (LNK) | PowerShell or other LOLBins with encoded, hidden or padded commands, borrowed icons, appended payloads |
+| Scripts | PowerShell, JavaScript, VBScript and batch, deobfuscated as text (base64, char codes, concatenation, batch substrings), downloaders |
+| PDF | JavaScript that runs on open, Launch actions, embedded files |
+| Archives and disk images | ZIP (including password `infected`), 7z and ISO, opened within strict limits, every member triaged; shortcut-plus-hidden-file lures and DLL side-loading. VHD/VHDX images are recognized and reported as not analyzed |
+| Windows programs | Packing, suspicious imports, signature validity, capa capabilities mapped to MITRE ATT&CK, decoded strings (FLOSS) |
 
-## Verdict
-- V-MAL-03 (malicious): A shortcut launches a scripting or download tool (LOLBin) with an
-  encoded, hidden, padded or URL-bearing command, or carries an appended program.
-  - Shortcut launches powershell.exe
-  - Encoded PowerShell command
-  - Command asks for a hidden window
-
-## Key findings
-- [HIGH] File name does not match content: Double extension: the name looks like a .pdf
-  file but the real extension is .lnk. Windows hides known extensions by default, so
-  users see only the decoy.
-- [HIGH] Shortcut launches powershell.exe
-- [HIGH] Encoded PowerShell command: ... Decoded (shown as text, not run): Write-Host fixture
-- [MEDIUM] Shortcut borrows another program's icon: It launches powershell.exe but shows
-  the icon of msedge.exe, so it looks like a different kind of file.
-- [MEDIUM] Command asks for a hidden window
-```
-
-The full report continues with the file's identity and hashes, a section per analyzer,
-every indicator (defanged), what was not checked, and ready-to-run hunt queries for
-Splunk, Microsoft Sentinel and Elastic. The same results are available as JSON.
-
-**Handles:** Windows programs (EXE, DLL), Office documents (legacy and OOXML, with
-macros), RTF documents, shortcuts (LNK), PowerShell, JavaScript, VBScript and batch
-scripts, HTML and SVG files (including HTML smuggling), HTA and WSF script containers,
-PDFs, emails (`.eml`, `.msg`), and ZIP, 7z and ISO containers, whose members are triaged
-recursively within strict limits. VHD and VHDX disk images are recognized and reported
-as not analyzed.
+Every report also gives defanged indicators, hunt queries for **Splunk, Microsoft
+Sentinel and Elastic**, the verdict with the rules that produced it, and a **Not checked**
+list. Output as Markdown, JSON or a self-contained HTML page; a whole folder at once
+gives a summary sorted worst first. How it fits together:
+[docs/architecture.md](docs/architecture.md).
 
 ## How well it works
 
@@ -82,6 +65,7 @@ removed because it flagged Microsoft's own scripts.
 ## Quick start
 
 ```sh
+git clone https://github.com/aeonstwilight/unopened && cd unopened
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[all]"
 unopened triage suspicious.bin                              # Markdown report
@@ -90,12 +74,14 @@ unopened triage inbox-export/ --out reports/                # every file, plus s
 ```
 
 For capa and YARA, point the tool at your own rules (see [Rules](#rules)). Or run the
-Docker image with no network at all:
+container image, with every analyzer installed and no network at all:
 
 ```sh
-docker build -t unopened .
-docker run --rm --network none -v "$PWD:/work" unopened triage /work/suspicious.bin
+docker run --rm --network none -v "$PWD:/work" ghcr.io/aeonstwilight/unopened \
+    triage /work/suspicious.bin
 ```
+
+(Or build it yourself: `docker build -t unopened .`)
 
 > **Handle real malware only inside an isolated analysis VM** (for example REMnux or
 > FLARE-VM) with no shared folders or clipboard. unopened never runs the file, but your

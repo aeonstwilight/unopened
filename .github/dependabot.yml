@@ -13,3 +13,8 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # capa, FLOSS and yara-python publish wheels for a new Python some months after
+      # its release; move the base image by hand once CI passes on it.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

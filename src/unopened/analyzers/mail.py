@@ -23,6 +23,7 @@ import tomllib
 from dataclasses import dataclass, field
 from email.message import EmailMessage, Message
 from email.utils import getaddresses, parseaddr
+from functools import cache
 from html.parser import HTMLParser
 from importlib import resources
 from typing import Any
@@ -91,6 +92,17 @@ def load_brands() -> dict[str, list[str]]:
     text = resources.files("unopened").joinpath("data/brands.toml").read_text("utf-8")
     return {name: [d.lower() for d in entry.get("domains", [])]
             for name, entry in tomllib.loads(text).items()}
+
+
+@cache
+def brand_names() -> dict[str, str]:
+    """How reports spell each brand ("PayPal", not "paypal")."""
+    text = resources.files("unopened").joinpath("data/brands.toml").read_text("utf-8")
+    return {key: entry.get("name", key) for key, entry in tomllib.loads(text).items()}
+
+
+def brand_name(key: str | None) -> str:
+    return brand_names().get(key or "", key or "")
 
 
 def _normalize(label: str) -> str:
@@ -209,24 +221,26 @@ def _walk(part: Message, parsed: Parsed, counter: list[int], depth: int, top: bo
             return
         payload = part.get_payload()
         for sub in payload if isinstance(payload, list) else []:
-            _walk(sub, parsed, counter, depth + 1, top=False)
+            if isinstance(sub, Message):
+                _walk(sub, parsed, counter, depth + 1, top=False)
         return
     disposition = (part.get_content_disposition() or "").lower()
-    name = part.get_filename()
-    if ctype in ("text/plain", "text/html") and disposition != "attachment" and not name:
+    filename = part.get_filename()
+    if ctype in ("text/plain", "text/html") and disposition != "attachment" and not filename:
         text = _text_of(part)
         (parsed.html if ctype == "text/html" else parsed.plain).append(text)
         return
     if ctype in ("application/pkcs7-mime", "application/x-pkcs7-mime"):
         parsed.notes.append("S/MIME-encrypted content (cannot be read without the key)")
-    if ctype == "application/ms-tnef" or (name or "").lower() == "winmail.dat":
+    if ctype == "application/ms-tnef" or (filename or "").lower() == "winmail.dat":
         parsed.notes.append("Outlook TNEF (winmail.dat) contents")
     try:
-        payload = part.get_payload(decode=True)
+        decoded = part.get_payload(decode=True)
     except Exception:
-        payload = None
+        decoded = None
+    payload = decoded if isinstance(decoded, bytes) else None
     parsed.attachments.append((
-        name or f"unnamed part ({ctype or 'no type'})", ctype, payload,
+        filename or f"unnamed part ({ctype or 'no type'})", ctype, payload,
         None if payload is not None else "payload could not be decoded",
     ))
 
@@ -237,7 +251,8 @@ def _text_of(part: Message) -> str:
             return str(part.get_content())
     except Exception:
         pass
-    raw = part.get_payload(decode=True) or b""
+    decoded = part.get_payload(decode=True)
+    raw = decoded if isinstance(decoded, bytes) else b""
     charset = part.get_content_charset() or "utf-8"
     try:
         return raw.decode(charset, errors="replace")
@@ -490,7 +505,7 @@ def _sender_findings(out: AnalyzerOutput, h: dict[str, str], auth: dict[str, Any
                              for d in brands[named]):
             f.append(Finding(
                 "email.display_name_brand", Severity.MEDIUM,
-                f"Display name uses the {named} brand, but the address is not theirs",
+                f"Display name uses the {brand_name(named)} brand, but the address is not theirs",
                 f"{display!r} sent from {from_domain!r}.",
             ))
 
@@ -509,8 +524,9 @@ def _sender_findings(out: AnalyzerOutput, h: dict[str, str], auth: dict[str, Any
                 f.append(Finding(
                     "email.lookalike_sender", Severity.HIGH if key != "return_path"
                     else Severity.MEDIUM,
-                    f"The {label} domain imitates {brand}",
-                    f"{dom!r} contains the {brand} name but is not one of its domains.",
+                    f"The {label} domain imitates {brand_name(brand)}",
+                    f"{dom!r} contains the {brand_name(brand)} name but is not one of its "
+                    "domains.",
                 ))
 
     reply = [address_domain(a) for _, a in _addresses(h.get("reply_to", ""))]
@@ -605,7 +621,7 @@ def _link_findings(out: AnalyzerOutput, links: list[dict[str, str]],
             "email.ip_link", Severity.MEDIUM, "Links point to raw IP addresses",
             ", ".join(ip_links[:MAX_LISTED]),
         ))
-    imitating = sorted({f"{lk['domain']} ({b})" for lk in links
+    imitating = sorted({f"{lk['domain']} ({brand_name(b)})" for lk in links
                         if (b := impersonated_brand(lk.get("domain", ""), brands))})
     if imitating:
         f.append(Finding(

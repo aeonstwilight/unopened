@@ -208,10 +208,10 @@ def _triage(session: _Session, path: Path, *, name: str, depth: int) -> Report:
         for d in r.data.pop("direct_indicators", []):
             found.add(Hit(d["kind"], d["value"], tuple(d.get("tags", ()))), source=r.name,
                       context=d.get("context", ""))
-    for child in children:
-        label = f"member {child['member']['name']}"
+    for entry in children:
+        label = f"member {entry['member']['name']}"
         found.merge([dict(e, sources=[f"{label}: {s}" for s in e["sources"]])
-                     for e in child["report"].indicators], [])
+                     for e in entry["report"].indicators], [])
     indicators = found.entries()
     if (r := by_name.get("strings")) and r.status in (Status.OK, Status.PARTIAL):
         r.findings += [

@@ -3,6 +3,24 @@
 Milestones are defined in `CLAUDE.md`. Each was planned, approved and merged as its own
 pull request.
 
+## 1.0.1
+
+- Fixed: a password page whose form posts straight to a Telegram, Discord or Slack
+  endpoint (no script involved) made the web analyzer fail instead of reporting
+  credential exfiltration. Found by the new type check; regression test added.
+- Type checking with mypy, now part of CI, with every reported issue fixed.
+- Brand names appear properly in findings ("imitates Microsoft", "PayPal"), from a `name`
+  field in `data/brands.toml`.
+- Container image published to `ghcr.io/aeonstwilight/unopened` on each release
+  (`.github/workflows/container.yml`), smoke-tested offline before it is pushed.
+- README: a "What it catches" table up front, clone-and-run quick start, a current
+  screenshot (`scripts/screenshot.py`), and example reports generated with the test
+  YARA and capa rules so every check shows as run.
+- New `docs/architecture.md` (pipeline diagram, what each stage guarantees, how the
+  safety rules are enforced, how to add an analyzer) and `CONTRIBUTING.md`.
+- Dependabot no longer proposes Python base-image versions that the analysis libraries
+  do not support yet.
+
 ## 1.0.0
 
 First public release: M1 to M11, plus release housekeeping (security policy, issue

@@ -6,74 +6,97 @@
 # is not one of that brand's domains or a subdomain of one. The name must start a label
 # or follow a hyphen, dot or digit ("secure-paypal", "microsoftonline-login"), so words
 # that merely contain it ("pineapple") do not match. Keep names at five or more
-# characters: short ones (ups, dhl, zoom) match too much.
+# characters: short ones (ups, dhl, zoom) match too much. `name` is how reports show
+# the brand; without it the section name is used.
 
 [microsoft]
+name = "Microsoft"
 domains = ["microsoft.com", "office.com", "office365.com", "outlook.com", "live.com",
            "microsoftonline.com", "sharepoint.com", "onmicrosoft.com", "hotmail.com",
            "msn.com", "azure.com", "windows.net", "microsoft365.com", "cloud.microsoft"]
 
 [office365]
+name = "Office 365"
 domains = ["office365.com", "office.com", "microsoft.com", "microsoftonline.com"]
 
 [outlook]
+name = "Outlook"
 domains = ["outlook.com", "office.com", "microsoft.com", "live.com"]
 
 [sharepoint]
+name = "SharePoint"
 domains = ["sharepoint.com", "microsoft.com"]
 
 [docusign]
+name = "DocuSign"
 domains = ["docusign.com", "docusign.net"]
 
 [paypal]
+name = "PayPal"
 domains = ["paypal.com", "paypal-communication.com", "paypalobjects.com"]
 
 [apple]
+name = "Apple"
 domains = ["apple.com", "icloud.com", "me.com"]
 
 [icloud]
+name = "iCloud"
 domains = ["icloud.com", "apple.com"]
 
 [amazon]
+name = "Amazon"
 domains = ["amazon.com", "amazonaws.com", "amazon.co.uk", "amazon.de", "amazon.ca",
            "amazonses.com", "a2z.com"]
 
 [google]
+name = "Google"
 domains = ["google.com", "gmail.com", "googlemail.com", "googleusercontent.com",
            "googleapis.com", "youtube.com", "goo.gl", "g.co"]
 
 [dropbox]
+name = "Dropbox"
 domains = ["dropbox.com", "dropboxmail.com", "dropboxusercontent.com"]
 
 [adobe]
+name = "Adobe"
 domains = ["adobe.com", "adobesign.com", "adobelogin.com", "echosign.com"]
 
 [netflix]
+name = "Netflix"
 domains = ["netflix.com"]
 
 [linkedin]
+name = "LinkedIn"
 domains = ["linkedin.com", "licdn.com"]
 
 [fedex]
+name = "FedEx"
 domains = ["fedex.com"]
 
 [wellsfargo]
+name = "Wells Fargo"
 domains = ["wellsfargo.com", "wf.com"]
 
 [chase]
+name = "Chase"
 domains = ["chase.com", "jpmorgan.com", "jpmorganchase.com"]
 
 [bankofamerica]
+name = "Bank of America"
 domains = ["bankofamerica.com", "bofa.com"]
 
 [intuit]
+name = "Intuit"
 domains = ["intuit.com", "quickbooks.com", "turbotax.com"]
 
 [quickbooks]
+name = "QuickBooks"
 domains = ["quickbooks.com", "intuit.com"]
 
 [coinbase]
+name = "Coinbase"
 domains = ["coinbase.com"]
 
 [wetransfer]
+name = "WeTransfer"
 domains = ["wetransfer.com", "we.tl"]

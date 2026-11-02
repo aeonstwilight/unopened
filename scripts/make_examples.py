@@ -5,7 +5,8 @@
 Only reports are written; the inputs are built in a temporary folder and deleted. They are
 the same harmless fixtures the tests use (reserved domains, a shortcut whose "payload" is
 Write-Host fixture, a macro that shows a MsgBox, a page that smuggles a program whose
-only instruction is `ret`).
+only instruction is `ret`). YARA and capa run with the test rules in tests/rules, so the
+reports show those checks as run rather than unavailable.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+RULES = ROOT / "tests" / "rules"
 sys.path.insert(0, str(ROOT / "tests"))
 
 from fixtures import lnk, mail, office, web  # noqa: E402
@@ -38,7 +40,8 @@ def main() -> None:
         for stem, name, make, formats in EXAMPLES:
             path = Path(tmp) / name
             path.write_bytes(make())
-            report = pipeline.triage(path, Options())
+            report = pipeline.triage(path, Options(yara_rules=RULES / "yara",
+                                                   capa_rules=RULES / "capa"))
             if "md" in formats:
                 (out / f"{stem}.md").write_text(markdown.render(report), encoding="utf-8")
             if "html" in formats:

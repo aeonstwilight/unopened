@@ -448,7 +448,8 @@ HTA_TAG = re.compile(r"<hta:application\b", re.I)
 
 
 def _identify_markup(text: str) -> FileType | None:
-    rest = text[MARKUP_PREAMBLE.match(text).end():]
+    preamble = MARKUP_PREAMBLE.match(text)  # always matches (every part is optional)
+    rest = text[preamble.end() if preamble else 0:]
     if not rest.startswith("<"):
         return None
     if re.match(r"<svg[\s>]", rest, re.I):
